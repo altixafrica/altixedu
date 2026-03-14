@@ -1,0 +1,486 @@
+---
+
+# Developer Reference: AltixEdu Frontend Specification
+
+This document is your complete guide for building the AltixEdu frontend. It covers all screens, flows, UI elements, and integration points. Use it as your single source of truth.
+
+## 1. User Roles & Access
+
+- **Roles:**
+  - Superadmin
+  - Ministry Admin
+  - School Admin
+  - Teacher
+  - Student
+  - Parent
+  - Bursar
+
+- **Role-based Navigation:**
+  - Each role sees only their permitted features.
+  - Dynamic menus and dashboards per role.
+
+## 2. Authentication Flows
+
+- **Login:**
+  - General login (username/email + password)
+  - Ministry admin login (email + password, POST /api/auth/login/ministry/)
+  - Show error messages for invalid credentials.
+
+- **Password Reset:**
+  - Self-reset (old password + new password)
+  - Admin-forced reset (email + new password)
+  - Show confirmation and error messages.
+
+- **Token Handling:**
+  - Store token securely (localStorage or sessionStorage)
+  - Attach token to all API requests.
+
+## 3. Dashboard Screens
+
+- **Superadmin Dashboard:**
+  - Overview of all ministries, schools, users.
+  - Create ministry admin, create school.
+  - View system statistics.
+
+- **Ministry Admin Dashboard:**
+  - Ministry info (country, state, currency)
+  - State dashboard: statistics, school list, reports, finances.
+  - Approve/reject requests, view audit logs.
+
+- **School Admin Dashboard:**
+  - School info, staff, students, classes, attendance, finances.
+  - Manage school profile, add/edit users.
+
+- **Other Roles:**
+  - Teacher: class management, attendance, grades.
+  - Student: profile, grades, attendance.
+  - Parent: child info, attendance, grades.
+  - Bursar: finance dashboard, billing.
+
+## 4. School Setup Flow
+
+- **Create School Form:**
+  - Fields: name, subdomain, email, phone, address, city, state, country.
+  - Validate required fields, uniqueness (subdomain, email).
+  - Show confirmation on success, error on failure.
+  - Only superadmin/ministry admin can access.
+
+## 5. Ministry Admin Features
+
+- **Dedicated Login Page:**
+  - POST /api/auth/login/ministry/
+  - Show ministry context after login (country, state, currency).
+
+- **State Dashboard:**
+  - List all schools in state.
+  - View state statistics, reports, finances.
+  - Approve school requests, manage state-level permissions.
+
+- **Permissions:**
+  - View dashboard, schools, statistics, reports, finances, approvals, audit logs.
+
+## 6. Multi-Country & State Support
+
+- **Country Selection:**
+  - Support for Nigeria, Kenya, Ghana, South Africa (expandable).
+  - Show country and state/province in all relevant screens.
+
+- **Currency Display:**
+  - Show currency code and symbol per country.
+
+## 7. UI & UX Requirements
+
+- **Responsive Design:**
+  - All screens must work on desktop, tablet, and mobile.
+
+- **Modern UI:**
+  - Use clean layouts, accessible color schemes, clear typography.
+  - Use cards, tables, modals, and form elements.
+
+- **Error Handling:**
+  - Show clear error messages for all failed actions.
+  - Display backend error messages (400, 403, 500).
+
+- **Success Feedback:**
+  - Show confirmation messages for successful actions.
+
+## 8. API Integration
+
+- **Endpoints to Integrate:**
+  - POST /api/auth/login/
+  - POST /api/auth/login/ministry/
+  - POST /api/auth/create-ministry-admin/
+  - POST /api/auth/reset-password/
+  - POST /api/schools/setup/
+  - GET /api/dashboard/*
+  - GET /api/government/*
+  - GET /api/billing/*
+
+- **Request/Response Handling:**
+  - Validate all responses, handle errors, show messages.
+
+## 9. Data Validation
+
+- **Forms:**
+  - Required fields, email format, password strength, state selection.
+  - Prevent duplicate subdomain/email on school creation.
+
+## 10. Testing & Quality
+
+- **Manual Testing:**
+  - Test all flows: login, school setup, ministry dashboard, error scenarios.
+
+- **Automated Testing (Optional):**
+  - Add unit tests for form validation and API integration.
+
+## 11. Documentation & Help
+
+- **User Guides:**
+  - Provide onboarding instructions for each role.
+
+- **Error Explanations:**
+  - Show clear messages for failed actions.
+
+## 12. Future Features (Optional)
+
+- **Bulk Import:**
+  - CSV upload for users/schools.
+
+- **Multi-language Support:**
+  - UI translation for major languages.
+
+- **Audit Logging:**
+  - Display audit logs for ministry admins.
+
+- **Health/Medical Records:**
+  - Add health record screens for students.
+
+---
+
+# Complete Endpoint & Screen Mapping
+
+Below is a detailed mapping of all backend endpoints, the screens/pages to be created, and the features each endpoint supports. Use this as your implementation checklist.
+
+## 1. Authentication & User Management
+
+- **Login Page**
+  - POST /api/auth/login/ (general login)
+  - POST /api/auth/login/ministry/ (ministry admin login)
+
+- **Password Reset Page**
+  - POST /api/auth/reset-password/
+
+- **Create Ministry Admin Page**
+  - POST /api/auth/create-ministry-admin/
+
+- **User Profile Page**
+  - GET /api/auth/me/
+  - PUT /api/auth/me/ (update profile)
+
+## 2. Dashboards
+
+- **Superadmin Dashboard**
+  - GET /api/dashboard/superadmin/
+  - GET /api/government/ministries/
+  - GET /api/government/schools/
+
+- **Ministry Admin Dashboard**
+  - GET /api/dashboard/ministry/
+  - GET /api/government/schools/?state=<state>
+  - GET /api/government/statistics/?state=<state>
+  - GET /api/government/reports/?state=<state>
+  - GET /api/government/finances/?state=<state>
+  - GET /api/government/audit-logs/?state=<state>
+
+- **School Admin Dashboard**
+  - GET /api/dashboard/schooladmin/
+  - GET /api/schools/<school_id>/profile/
+  - GET /api/schools/<school_id>/staff/
+  - GET /api/schools/<school_id>/students/
+  - GET /api/schools/<school_id>/classes/
+  - GET /api/schools/<school_id>/attendance/
+  - GET /api/schools/<school_id>/finances/
+
+- **Teacher Dashboard**
+  - GET /api/dashboard/teacher/
+  - GET /api/academics/classes/
+  - GET /api/attendance/
+
+- **Student Dashboard**
+  - GET /api/dashboard/student/
+  - GET /api/academics/grades/
+  - GET /api/attendance/
+  - GET /api/health/records/
+
+- **Parent Dashboard**
+  - GET /api/dashboard/parent/
+  - GET /api/students/<student_id>/profile/
+  - GET /api/academics/grades/
+  - GET /api/attendance/
+
+- **Bursar Dashboard**
+  - GET /api/dashboard/bursar/
+  - GET /api/billing/
+
+## 3. School Setup & Management
+
+- **Create School Page**
+  - POST /api/schools/setup/
+
+- **School Profile Page**
+  - GET /api/schools/<school_id>/profile/
+  - PUT /api/schools/<school_id>/profile/
+
+- **Bulk Import Page**
+  - POST /api/bulk-import/users/
+  - POST /api/bulk-import/schools/
+
+## 4. Health/Medical Records
+
+- **Student Health Records Page**
+  - GET /api/health/records/
+  - POST /api/health/records/
+  - PUT /api/health/records/<record_id>/
+
+## 5. Audit Logging
+
+- **Audit Log Page**
+  - GET /api/government/audit-logs/
+
+## 6. Multi-language Support
+
+- **Language Settings Page**
+  - GET /api/i18n/languages/
+  - POST /api/i18n/set-language/
+
+## 7. Attendance & Reports
+
+- **Attendance Page**
+  - GET /api/attendance/
+  - POST /api/attendance/
+
+- **Report Generation Page**
+  - GET /api/government/reports/
+  - GET /api/schools/<school_id>/reports/
+
+## 8. Billing & Finance
+
+- **Billing Page**
+  - GET /api/billing/
+  - POST /api/billing/payments/
+
+- **Finance Page**
+  - GET /api/government/finances/
+  - GET /api/schools/<school_id>/finances/
+
+## 9. Notifications
+
+- **Notifications Page**
+  - GET /api/notifications/
+
+## 10. User Management
+
+- **User List Page**
+  - GET /api/users/
+
+- **User Detail Page**
+  - GET /api/users/<user_id>/
+  - PUT /api/users/<user_id>/
+
+## 11. Settings & Configuration
+
+- **Settings Page**
+  - GET /api/settings/
+  - PUT /api/settings/
+
+---
+
+# Superadmin Features & School Setup (Expanded)
+
+## Superadmin Pages & Features
+
+- **Superadmin Dashboard**
+  - GET /api/dashboard/superadmin/
+  - View all ministries, schools, users, system statistics
+  - Access government features: GET /api/government/ministries/, GET /api/government/schools/
+  - Manage all users: GET /api/users/, PUT /api/users/<user_id>/
+  - Create ministry admin: POST /api/auth/create-ministry-admin/
+  - Create school: POST /api/schools/setup/
+  - View all reports: GET /api/government/reports/
+  - Manage billing: GET /api/billing/
+  - System administration: settings, export data
+
+- **Create Ministry Admin Page**
+  - POST /api/auth/create-ministry-admin/
+  - Fields: email, first_name, last_name, password, country, state_or_province
+  - Only superadmin can access
+  - Show confirmation/error messages
+
+- **Create School Page**
+  - POST /api/schools/setup/
+  - Fields: name, subdomain, email, phone, address, city, state, country
+  - Validate required fields, uniqueness (subdomain, email)
+  - Only superadmin/ministry admin can access
+  - Show confirmation/error messages
+
+- **School Management Page**
+  - GET /api/government/schools/
+  - View, edit, and manage all schools
+  - PUT /api/schools/<school_id>/profile/
+
+- **Ministry Management Page**
+  - GET /api/government/ministries/
+  - View, edit, and manage all ministries
+
+- **User Management Page**
+  - GET /api/users/
+  - View, edit, and manage all users
+
+- **Reports & Analytics Page**
+  - GET /api/government/reports/
+  - View system-wide reports
+
+- **Billing & Finance Page**
+  - GET /api/billing/
+  - Manage billing and payments
+
+- **Settings & Export Page**
+  - GET /api/settings/
+  - PUT /api/settings/
+  - Export data: GET /api/export/
+
+## School Creation: All Required & Optional Fields
+
+### Required Fields (must be filled)
+- name (string)
+- subdomain (string, unique)
+- email (string, unique)
+- phone (string)
+- address (string)
+- city (string)
+- state (string)
+- country (string)
+
+### Optional/Advanced Fields (recommended for full setup)
+- postal_code (string)
+- website (string)
+- timezone (string, default: 'UTC', e.g., 'Africa/Lagos')
+- language (string, default: 'en')
+- school_type (string, default: 'private', choices: private, public, international, etc.)
+- region (string, for geographic templates)
+- established_year (integer)
+- is_active (boolean, default: True)
+- primary_color (string, hex, default: '#0066CC')
+- secondary_color (string, hex, default: '#FF6600')
+
+### Implementation Checklist
+- All required fields must be validated and collected
+- Optional fields should be included in the form for advanced setup
+- Validate uniqueness for subdomain and email
+- State must be enforced and confirmed in response
+- School_type, region, established_year, colors, and is_active can be set for richer school profiles
+
+### Example Request (Full Setup)
+{
+  "name": "Lagos State International School",
+  "subdomain": "lsis-school-1",
+  "email": "admin@lsis.com",
+  "phone": "08012345678",
+  "address": "123 Ikoyi Road, Lagos",
+  "city": "Lagos",
+  "state": "Lagos",
+  "country": "Nigeria",
+  "postal_code": "101234",
+  "website": "www.lsis.com",
+  "timezone": "Africa/Lagos",
+  "language": "en",
+  "school_type": "private",
+  "region": "Southwest",
+  "established_year": 2005,
+  "is_active": true,
+  "primary_color": "#0066CC",
+  "secondary_color": "#FF6600"
+}
+
+### Example Response (Full Setup)
+{
+  "id": 1,
+  "name": "Lagos State International School",
+  "subdomain": "lsis-school-1",
+  "email": "admin@lsis.com",
+  "phone": "08012345678",
+  "address": "123 Ikoyi Road, Lagos",
+  "city": "Lagos",
+  "state": "Lagos",
+  "country": "Nigeria",
+  "postal_code": "101234",
+  "website": "www.lsis.com",
+  "timezone": "Africa/Lagos",
+  "language": "en",
+  "school_type": "private",
+  "region": "Southwest",
+  "established_year": 2005,
+  "is_active": true,
+  "primary_color": "#0066CC",
+  "secondary_color": "#FF6600",
+  "message": "School \"Lagos State International School\" created successfully with state \"Lagos\""
+}
+
+---
+
+# Update All School Creation Screens
+- Add all optional fields to the frontend form
+- Allow superadmin/ministry admin to set advanced fields
+- Validate and display all fields in school profile and management screens
+
+---
+
+# Ministry Admin: School Creation Flow
+
+- **Ministry Admin Dashboard**
+  - Ministry Admins can create schools from their dashboard.
+  - Endpoint: POST /api/schools/setup/
+  - Fields required: name, subdomain, email, phone, address, city, state, country
+  - State is auto-filled or restricted to ministry admin's assigned state.
+  - Validation: All fields required, subdomain/email unique, state enforced
+  - Permissions: Ministry Admin can only create schools in their assigned state
+  - Error Handling:
+    - 400: Missing fields or duplicate subdomain/email
+    - 403: Attempt to create school outside assigned state
+  - Success: 201 Created, confirmation message, school listed in state dashboard
+
+- **Ministry Admin School Management**
+  - View all schools in their assigned state: GET /api/government/schools/?state=<assigned_state>
+  - Edit school profile: PUT /api/schools/<school_id>/profile/
+  - Approve/reject school requests (if applicable)
+
+## Permissions & Access Control
+
+- **Superadmin:**
+  - Full access to all features, users, schools, ministries, billing, reports, settings
+- **Ministry Admin:**
+  - Access to state dashboard, schools in state, statistics, reports, finances, approvals, audit logs
+- **School Admin:**
+  - Access to own school, staff, students, classes, attendance, finances, settings
+
+---
+
+# All Pages & Endpoints (Checklist)
+
+- Superadmin Dashboard: GET /api/dashboard/superadmin/
+- Create Ministry Admin: POST /api/auth/create-ministry-admin/
+- Create School: POST /api/schools/setup/
+- School Management: GET /api/government/schools/, PUT /api/schools/<school_id>/profile/
+- Ministry Management: GET /api/government/ministries/
+- User Management: GET /api/users/, PUT /api/users/<user_id>/
+- Reports & Analytics: GET /api/government/reports/
+- Billing & Finance: GET /api/billing/
+- Settings & Export: GET /api/settings/, PUT /api/settings/, GET /api/export/
+
+---
+
+# Implementation Notes
+
+- All endpoints, fields, and flows are now included.
+- School setup and superadmin features are fully mapped.
+- Use this expanded section as your reference for frontend implementation.

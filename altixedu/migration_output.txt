@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "C:\Users\pc\AppData\Local\Programs\Python\Python311\Lib\site-packages\django\__init__.py", line 19, in setup
+    configure_logging(settings.LOGGING_CONFIG, settings.LOGGING)
+                      ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pc\AppData\Local\Programs\Python\Python311\Lib\site-packages\django\conf\__init__.py", line 81, in __getattr__
+    self._setup(name)
+  File "C:\Users\pc\AppData\Local\Programs\Python\Python311\Lib\site-packages\django\conf\__init__.py", line 61, in _setup
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: Requested setting LOGGING_CONFIG, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
