@@ -1,0 +1,1595 @@
+# ALTIXEDU FRONTEND - COMPLETE IMPLEMENTATION GUIDE
+
+This is the comprehensive guide for building the AltixEdu frontend. It covers ALL screens, ALL endpoints, ALL features, and ALL workflows.
+Use this as your single source of truth for frontend development.
+
+---
+
+## TABLE OF CONTENTS
+
+1. USER ROLES & ACCESS CONTROL
+2. AUTHENTICATION FLOWS
+3. DASHBOARDS (All Roles)
+4. SCHOOL SETUP & MANAGEMENT
+5. STUDENTS MANAGEMENT
+6. ACADEMICS (Classrooms, Subjects, Exams, Grades)
+7. ATTENDANCE
+8. FINANCE & PAYMENTS
+9. BILLING & SUBSCRIPTIONS
+10. GOVERNMENT FEATURES
+11. HEALTH RECORDS
+12. NOTIFICATIONS & MESSAGING
+13. PLATFORM & BRANDING
+14. BULK IMPORT
+15. SETTINGS & EXPORT
+16. INTERNATIONALIZATION
+
+---
+
+## 1. USER ROLES & ACCESS CONTROL
+
+### Roles Available
+- **Superadmin** - Full system access, manage ministries, schools, users, billing
+- **Ministry Admin** - Manage schools in their assigned state, view state dashboard, approve payments
+- **School Admin** - Manage own school, staff, students, finances, academic records
+- **Teacher** - View assigned classes, manage attendance, enter grades
+- **Student** - View own profile, grades, attendance, health records
+- **Parent** - View child's profile, grades, attendance, health records
+- **Bursar** - Manage school finances, fees, payments, invoices
+
+### Role-Based Navigation
+- Each role should see only permitted features
+- Dynamic menu/navigation based on logged-in role
+- Redirect unauthorized users (403 Forbidden)
+
+---
+
+## 2. AUTHENTICATION FLOWS
+
+### 2.1 General Login
+**Endpoint:** POST /api/auth/login/
+**Role:** All users
+**Fields:** 
+- username OR email (required)
+- password (required)
+**Response:**
+```json
+{
+  "token": "abc123token",
+  "user_id": 1,
+  "email": "user@school.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "role": "teacher",
+  "school": {
+    "id": 1,
+    "name": "Lagos International School",
+    "subdomain": "lagos-school-1"
+  },
+  "permissions": ["view_grades", "record_attendance"]
+}
+```
+**Implementation:**
+- Show login form with email/username and password fields
+- Validate input before sending
+- Store token securely (localStorage with HTTP-only flag if possible)
+- Show error messages for invalid credentials
+- Redirect to role-specific dashboard on success
+- Add "Remember me" option (optional)
+- Add "Forgot password" link
+
+### 2.2 Ministry Admin Login
+**Endpoint:** POST /api/auth/login/ministry/
+**Role:** Ministry Admins only
+**Fields:**
+- email (required)
+- password (required)
+**Response:**
+```json
+{
+  "token": "ministry_token_123",
+  "user_id": 5,
+  "email": "ministry@gov.com",
+  "first_name": "Admin",
+  "last_name": "Ministry",
+  "role": "ministry_admin",
+  "ministry": {
+    "country": "Nigeria",
+    "state_or_province": "Lagos",
+    "currency": "NGN"
+  }
+}
+```
+**Implementation:**
+- Separate login page for ministry admins
+- Mark login mode as "Ministry Admin"
+- Display ministry context (state, country) in dashboard after login
+- All endpoints respect state-based filtering
+
+### 2.3 Password Reset
+**Endpoint:** POST /api/auth/reset-password/
+**Role:** All users
+**Fields:**
+- email (required) - user's email
+- new_password (required) - new password
+- token (if sent via email) - optional
+**Response:**
+```json
+{
+  "message": "Password reset successfully"
+}
+```
+**Implementation:**
+- Password reset request form (email only)
+- Backend sends reset link to email
+- Reset confirmation page (token + new password)
+- Show password strength indicator
+- Confirm password match validation
+- Show success/error message
+
+### 2.4 Current User Profile
+**Endpoint:** GET /api/auth/me/
+**Role:** All authenticated users
+**Response:** Current user data with role, school, permissions
+**Implementation:**
+- Display user profile in top navigation/sidebar
+- Show current user info (name, email, role, school)
+- Link to user settings/profile page
+
+### 2.5 Logout
+**Endpoint:** POST /api/auth/logout/
+**Implementation:**
+- Clear token from storage
+- Redirect to login page
+- Show logout confirmation message
+
+---
+
+## 3. DASHBOARDS - ALL ROLES
+
+### 3.1 Superadmin Dashboard
+**Endpoint:** GET /api/dashboard/superadmin/
+**Access:** Superadmin only
+**Display:**
+- System statistics (total schools, ministries, users, students)
+- Quick actions: Create Ministry Admin, Create School
+- List of all ministries with status
+- List of all schools with status
+- Recent activities/audit logs
+- System health and alerts
+- Billing overview
+
+**Actions Available:**
+- Navigate to Users Management
+- Navigate to Schools Management
+- Navigate to Billing
+- Navigate to Government Reports
+- Navigate to Audit Logs
+- Create new ministry admin
+- Create new school
+
+**Implementation:**
+- Grid/card layout showing key metrics
+- Tables for ministries and schools with sorting/pagination
+- Quick action buttons (Create Ministry Admin, Create School)
+- Links to detailed management pages
+
+### 3.2 Ministry Admin Dashboard
+**Endpoint:** GET /api/dashboard/ministry/
+**Access:** Ministry Admin only (auto-filtered to own state)
+**Display:**
+- State overview (state name, country, currency)
+- Total schools in state (total, active, pending approval)
+- Total students in state
+- Total teachers in state
+- Financial summary (total fees, total paid, collection %)
+- Outstanding fees by school
+- Recent activities/audit logs
+- Compliance metrics
+- At-risk schools
+
+**Sub-endpoints:**
+- GET /api/government/dashboard/ministry/alerts/ - Alerts for the state
+- GET /api/government/dashboard/ministry/top_performers/ - Top performing schools
+- GET /api/government/schools/?state=<state> - Schools in state
+- GET /api/government/statistics/?state=<state> - State statistics
+- GET /api/government/reports/?state=<state> - State reports
+- GET /api/government/finances/?state=<state> - State finances
+- GET /api/government/audit-logs/?state=<state> - Audit logs
+
+**Actions Available:**
+- Create school (POST /api/schools/setup/)
+- View schools list
+- View school details
+- Approve/reject schools (if applicable)
+- View state reports
+- View audit logs
+- View financial reports
+- Manage state settings (if applicable)
+
+**Implementation:**
+- Similar to superadmin but state-focused
+- All data auto-filtered to ministry admin's assigned state
+- Cannot see other states' data
+- School list with state-wide filters
+- State-level reports and analytics
+
+### 3.3 School Admin Dashboard
+**Endpoint:** GET /api/dashboard/schooladmin/
+**Access:** School Admin only (own school only)
+**Display:**
+- School name and info
+- Student statistics (total, active, status breakdown)
+- Teacher statistics (total, by department)
+- Classroom statistics (total, students per classroom)
+- Attendance summary (overall attendance %, trends)
+- Financial summary (total fees, paid, outstanding, collection %)
+- At-risk students (top 20)
+- Recent activities
+
+**Statistics Displayed:**
+```
+{
+  "statistics": {
+    "total_students": 450,
+    "total_teachers": 25,
+    "total_classrooms": 12,
+    "total_subjects": 8,
+    "at_risk_students": 15
+  },
+  "finance": {
+    "total_fees": 5000000,
+    "total_paid": 3500000,
+    "total_outstanding": 1500000,
+    "collection_percentage": 70
+  },
+  "students": [...{id, first_name, last_name, classroom, status}...],
+  "teachers": [...{id, first_name, last_name, email}...],
+  "classrooms": [...{id, name, grade_level, student_count}...],
+  "subjects": [...{id, name, code}...],
+  "at_risk_alerts": [...student alerts...]
+}
+```
+
+**Actions Available:**
+- View students list
+- View teachers list
+- View classrooms
+- View subjects
+- Manage attendance
+- Manage finances
+- View reports
+- Edit school profile
+- Manage school settings
+
+**Implementation:**
+- Card-based layout with key metrics
+- Charts for financial and attendance data
+- Quick access to main features
+- Alert notifications for at-risk students
+- Links to detailed management pages
+
+### 3.4 Teacher Dashboard
+**Endpoint:** GET /api/dashboard/teacher/
+**Access:** Teachers only
+**Display:**
+- Assigned classrooms (list with student counts)
+- Assigned subjects
+- Latest attendance records
+- Student list for each class
+- Upcoming exams/assessments
+- Latest grades entered
+
+**Actions Available:**
+- Record attendance
+- Enter grades
+- View student grades
+- View student profiles
+- Send messages to students/parents
+- View class list
+
+**Implementation:**
+- List of assigned classrooms
+- Quick access to attendance recording
+- Grade entry interface
+- Class management features
+
+### 3.5 Student Dashboard
+**Endpoint:** GET /api/dashboard/student/
+**Access:** Students only
+**Display:**
+- Student profile (name, admission number, classroom)
+- My grades (by subject, by exam)
+- My attendance (attendance %, days absent)
+- My health records (list)
+- Latest announcements/messages
+- Financial status (fees due, paid, outstanding)
+
+**Actions Available:**
+- View grades
+- View attendance record
+- View health records
+- View messages
+
+**Implementation:**
+- Personal profile display
+- Grades table/cards
+- Attendance chart/percentage
+- Health records list
+- Messages inbox
+
+### 3.6 Parent Dashboard
+**Endpoint:** GET /api/dashboard/parent/
+**Access:** Parents only
+**Display:**
+- Child/Children profile links
+- Each child's:
+  - Grades
+  - Attendance
+  - Health records
+  - Current fees status
+  - Recent school messages
+
+**Actions Available:**
+- View child's profile
+- View child's grades
+- View child's attendance
+- View child's health records
+- View messages from school
+
+**Implementation:**
+- List of children
+- Quick access to each child's info
+- Grades display
+- Attendance display
+- Health records summary
+
+### 3.7 Bursar Dashboard
+**Endpoint:** GET /api/dashboard/bursar/
+**Access:** Bursars only
+**Display:**
+- School finance overview
+- All student fees (paid, outstanding, overdue)
+- Total fees vs paid (collection rate %)
+- Fees by student
+- Recent payments
+- Outstanding fees by student
+- Payment trends
+
+**Key Sections:**
+- Fee summary (total, paid, outstanding)
+- Payment history (recent transactions)
+- Student fee status (searchable table)
+- Finance reports
+
+**Actions Available:**
+- Record payments (POST /api/student-fees/<id>/add_payment/)
+- View payment history
+- Generate invoices
+- View fee structure
+- View financial reports
+
+**Implementation:**
+- Finance dashboard with charts
+- Student fee management table
+- Payment recording form
+- Invoice generation
+- Financial reports
+
+---
+
+## 4. SCHOOL SETUP & MANAGEMENT
+
+### 4.1 Create School (Superadmin & Ministry Admin)
+**Endpoint:** POST /api/schools/setup/
+**Access:** Superadmin (any state), Ministry Admin (own state only)
+
+**Required Fields:**
+- name (string) - School name
+- subdomain (string) - Unique subdomain (e.g., "lagos-school-1")
+- email (string) - School email (unique)
+- phone (string) - School phone number
+- address (string) - Street address
+- city (string) - City
+- state (string) - State/Province (required, enforced)
+- country (string) - Country
+
+**Optional Fields:**
+- postal_code (string)
+- website (string)
+- timezone (string, default: 'UTC')
+- language (string, default: 'en')
+- school_type (string, default: 'private')
+- region (string)
+- established_year (integer)
+- is_active (boolean, default: True)
+- primary_color (string, hex, default: '#0066CC')
+- secondary_color (string, hex, default: '#FF6600')
+
+**Validation:**
+- All required fields must be filled
+- Subdomain must be unique and alphanumeric
+- Email must be unique and valid format
+- State must match ministry admin's assigned state (if ministry admin)
+
+**Response (201 Created):**
+```json
+{
+  "id": 1,
+  "name": "Lagos State International School",
+  "subdomain": "lsis-school-1",
+  "email": "admin@lsis.com",
+  "phone": "08012345678",
+  "address": "123 Ikoyi Road, Lagos",
+  "city": "Lagos",
+  "state": "Lagos",
+  "country": "Nigeria",
+  "postal_code": "101234",
+  "website": "www.lsis.com",
+  "timezone": "Africa/Lagos",
+  "language": "en",
+  "school_type": "private",
+  "region": "Southwest",
+  "established_year": 2005,
+  "is_active": true,
+  "primary_color": "#0066CC",
+  "secondary_color": "#FF6600",
+  "message": "School \"Lagos State International School\" created successfully with state \"Lagos\""
+}
+```
+
+**Error Responses:**
+- 400: Missing required fields
+- 400: Duplicate subdomain
+- 400: Duplicate email
+- 403: Ministry admin trying to create school in different state
+- 403: Insufficient permissions
+
+**Implementation:**
+- Form with all fields (required fields marked)
+- Subdomain validation (alphanumeric, unique check)
+- Email validation
+- State dropdown (auto-selected for ministry admins)
+- Submit button with loading state
+- Success/error message display
+- Redirect to school management page on success
+
+### 4.2 School Management Page
+**Endpoints:**
+- GET /api/government/schools/ - List all schools (superadmin) or schools in state (ministry admin)
+- GET /api/government/schools/?state=<state> - Filter by state
+- GET /api/schools/<school_id>/profile/ - School details
+- PUT /api/schools/<school_id>/profile/ - Update school profile
+- DELETE /api/schools/<school_id>/ - Delete school (if implemented)
+
+**Displaying Schools:**
+- Table/list view with columns: name, subdomain, email, city, state, status, actions
+- Filters: state, status, school_type
+- Sorting: by name, state, creation date
+- Pagination
+
+**School Detail View:**
+- School name, email, phone, address
+- Status (active/inactive)
+- Branding (logo, colors)
+- Contact info
+- School type
+- Edit button
+
+**School Edit Form:**
+- Update allowed fields (website, phone, address, branding, etc.)
+- Save changes
+- Show success/error message
+
+**Implementation:**
+- School list table with CRUD actions
+- Detail view with expandable sections
+- Edit form modal or dedicated page
+- Delete confirmation dialog
+- Search/filter functionality
+
+### Ministry Admin - School Creation & Management
+**Same as above but:**
+- Can only create schools in their assigned state
+- State field is pre-filled and cannot be changed
+- School list shows only schools in their state
+- Cannot edit school state
+
+---
+
+## 5. STUDENTS MANAGEMENT
+
+### 5.1 Student List
+**Endpoint:** GET /api/students/
+**Access:** School Admin, Teachers
+**Response:** List of students with pagination
+```json
+{
+  "results": [
+    {
+      "id": 1,
+      "first_name": "Chinua",
+      "last_name": "Achebe",
+      "admission_number": "ADM001",
+      "date_of_birth": "2010-05-15",
+      "gender": "M",
+      "status": "active",
+      "classroom": {
+        "id": 1,
+        "name": "JSS1A"
+      },
+      "photo": "https://school.com/media/photos/student1.jpg",
+      "enrollment_date": "2020-01-15",
+      "school": 1
+    },
+    ...
+  ],
+  "count": 450,
+  "next": "http://api/students/?page=2",
+  "previous": null
+}
+```
+
+**Filters Available:**
+- classroom (filter by class)
+- status (active, inactive, transferred, etc.)
+- gender (M/F)
+- date_of_birth (date range)
+
+**Sorting:** By name, admission number, enrollment date, classroom
+
+**Implementation:**
+- Table view with columns: name, admission number, classroom, status, gender, photo
+- Filters sidebar
+- Sorting options
+- Pagination
+- Action buttons: View, Edit, Delete
+- Add Student button
+
+### 5.2 Create Student
+**Endpoint:** POST /api/students/
+**Fields:**
+- first_name (required)
+- last_name (required)
+- admission_number (required, unique)
+- date_of_birth (required)
+- gender (required)
+- classroom (required)
+- photo (optional, file upload)
+- status (optional, default: 'active')
+
+**Implementation:**
+- Form with all fields
+- Photo upload with preview
+- Classroom dropdown
+- Status select
+- Submit and save
+- Success message with created student ID
+- Option to add another student
+
+### 5.3 Student Detail & Edit
+**Endpoint:** GET /api/students/<student_id>/, PUT /api/students/<student_id>/
+**Display:**
+- Student profile (name, admission number, photo)
+- Personal info (DOB, gender, enrollment date)
+- Classroom assignment
+- Guardian/Parent links
+- Attendance summary
+- Grade summary
+- Health records list
+- Financial status (fees)
+
+**Actions:**
+- Edit student info
+- Add/remove guardians
+- View attendance
+- View grades
+- View health records
+- View fees
+
+**Implementation:**
+- Detail page with tabs: Profile, Attendance, Grades, Health, Fees
+- Edit form for profile info
+- Guardian management section
+- Links to related pages
+
+### 5.4 Add Student Guardians/Parents
+**Related Endpoint:** Add parent/guardian to student
+**Fields:** parent_id, relationship
+**Implementation:**
+- Search for existing parent by email
+- Or create new parent account
+- Set relationship (Mother, Father, Guardian, etc.)
+- Save and confirm
+
+### 5.5 Bulk Import Students
+**Endpoint:** POST /api/bulk-import/users/ (with role: student)
+**CSV Format:**
+```
+first_name, last_name, email, admission_number, date_of_birth, gender, classroom_id
+Chinua, Achebe, chinua@school.com, ADM001, 2010-05-15, M, 1
+...
+```
+**Response:**
+```json
+{
+  "message": "Import completed",
+  "total": 100,
+  "success": 98,
+  "failed": 2,
+  "errors": [
+    {"row": 5, "error": "Duplicate admission number"},
+    {"row": 10, "error": "Invalid email format"}
+  ]
+}
+```
+**Implementation:**
+- CSV drag-and-drop upload
+- Preview parsed data
+- Validation before import
+- Progress indicator
+- Result summary with errors listed
+
+---
+
+## 6. ACADEMICS - CLASSROOMS, SUBJECTS, EXAMS, GRADES
+
+### 6.1 Classroom Management
+**Endpoint:** GET /api/classrooms/, POST /api/classrooms/, PUT /api/classrooms/<id>/, DELETE /api/classrooms/<id>/
+**Fields:**
+- name (e.g., "JSS1A", "SSS3B")
+- grade_level (e.g., "JS1", "SS3")
+- school (auto-set)
+
+**Implementation:**
+- List of classrooms with student counts
+- Add classroom form
+- Edit classroom
+- Delete classroom (with confirmation)
+- View students in classroom
+
+### 6.2 Subject Management
+**Endpoint:** GET /api/subjects/, POST /api/subjects/, PUT /api/subjects/<id>/, DELETE /api/subjects/<id>/
+**Fields:**
+- name (e.g., "Mathematics", "English Language")
+- code (e.g., "MATH101")
+- school (auto-set)
+
+**Implementation:**
+- List of subjects
+- Add subject form
+- Edit subject
+- Delete subject
+- View classes taking subject
+
+### 6.3 Teacher-Subject Assignment
+**Endpoint:** GET /api/teacher-subjects/, POST /api/teacher-subjects/, PUT /api/teacher-subjects/<id>/, DELETE /api/teacher-subjects/<id>/
+**Fields:**
+- teacher (select teacher)
+- subject (select subject)
+- classroom (select classroom)
+
+**Response includes:** teacher name, subject name, classroom name
+
+**Implementation:**
+- Assign teachers to subjects and classrooms
+- List of all teacher-subject assignments
+- Edit assignments
+- Remove assignments
+- Prevent duplicate assignments
+
+### 6.4 Exam Management
+**Endpoint:** GET /api/exams/, POST /api/exams/, PUT /api/exams/<id>/, DELETE /api/exams/<id>/
+**Fields:**
+- name (e.g., "First Term Exam", "Midterm Assessment")
+- school (auto-set)
+- start_date
+- end_date
+
+**Implementation:**
+- Create exam period
+- Set exam dates
+- Edit exam details
+- Delete exam
+- View results for exam
+
+### 6.5 Exam Results / Grades
+**Endpoint:** GET /api/exam-results/, POST /api/exam-results/, PUT /api/exam-results/<id>/, DELETE /api/exam-results/<id>/
+**Fields:**
+- student (select student)
+- exam (select exam)
+- score (0-100 or custom grading scale)
+- grade (A, B, C, D, F or custom)
+
+**Display:**
+- Student grades by exam
+- Student grades by subject
+- Class performance summary
+- Grade distribution
+
+**Implementation:**
+- Grade entry form (bulk entry by classroom)
+- Grade sheet view by classroom/subject
+- Student transcript/grades report
+- Grade analytics
+
+---
+
+## 7. ATTENDANCE
+
+### 7.1 Attendance Recording
+**Endpoint:** GET /api/attendance/, POST /api/attendance/
+**Fields:**
+- student (select student)
+- date (date picker)
+- status (Present, Absent, Late, Excused)
+- recorded_by (auto-set to logged-in user)
+
+**Implementation:**
+- Attendance form (classroom view with checkbox list)
+- Date picker
+- Status dropdown (Present/Absent/Late/Excused)
+- Bulk submit button
+- Success confirmation
+- Unable to record future dates
+
+### 7.2 Attendance Reports
+**Endpoint:** GET /api/attendance/ with filters
+**Filters:**
+- student (filter by student)
+- date_from, date_to (date range)
+- status (filter by status)
+- classroom (filter by class)
+
+**Display:**
+- Attendance percentage per student
+- Days absent, late, present
+- Attendance trends
+- Absenteeism alerts (>20% absent)
+
+**Exports:** CSV, PDF
+
+**Implementation:**
+- Attendance report table
+- Filter controls
+- Export buttons
+- Visualizations (charts, graphs)
+- Alerts for high absenteeism
+
+---
+
+## 8. FINANCE & PAYMENTS
+
+### 8.1 Fee Configuration
+**Endpoint:** GET /api/fees/, POST /api/fees/, PUT /api/fees/<id>/, DELETE /api/fees/<id>/
+**Fields:**
+- name (e.g., "Tuition", "Exam", "Sports")
+- school (auto-set)
+- amount (numeric)
+
+**Implementation:**
+- List of fee types
+- Add new fee
+- Edit fee amount
+- Delete fee (if not assigned to students)
+- View students assigned to fee
+
+### 8.2 Student Fee Assignment
+**Endpoint:** GET /api/student-fees/, POST /api/student-fees/, PUT /api/student-fees/<id>/
+**Fields:**
+- student (select student)
+- fee (select fee)
+- due_date (date picker)
+
+**Response includes:**
+- student_name, fee_name, fee_amount
+- amount_paid, amount_remaining
+- paid (boolean)
+- payment history
+
+**Implementation:**
+- Assign fees to students (bulk or individual)
+- Fee list with due dates
+- Payment status indicator
+- Payment history for each fee
+
+### 8.3 Record Payment
+**Endpoint:** POST /api/student-fees/<student_fee_id>/add_payment/
+**Fields:**
+- amount (numeric)
+
+**Response:**
+```json
+{
+  "detail": "Payment of 50000 recorded successfully",
+  "fee": {
+    "id": 1,
+    "student": "Chinua Achebe",
+    "fee": "Tuition",
+    "fee_amount": 100000,
+    "amount_paid": 50000,
+    "amount_remaining": 50000,
+    "paid": false,
+    "history": [{"amount": 50000, "date": "2024-03-15"}]
+  }
+}
+```
+
+**Implementation:**
+- Payment form (amount input)
+- Validate amount <= remaining balance
+- Submit payment
+- Show updated balance
+- Print receipt
+- Send payment confirmation
+
+### 8.4 Finance Dashboard / Reports
+**Display:**
+- Total fees (all students)
+- Total paid
+- Total outstanding
+- Collection rate (%)
+- Fees breakdown by type
+- Top outstanding students
+
+**Implementation:**
+- Finance summary cards
+- Charts showing collection trends
+- Outstanding fees table
+- Fee receipt generation
+- Financial reports
+
+---
+
+## 9. BILLING & SUBSCRIPTIONS
+
+### 9.1 Pricing Page (Public - No Auth Required)
+**Endpoint:** GET /api/billing/pricing/
+**Display:**
+- All subscription tiers
+- Features for each tier
+- Pricing (monthly and annual)
+- Trial period info
+- Support level
+
+**Example Response:**
+```json
+{
+  "tiers": [
+    {
+      "id": 1,
+      "name": "starter",
+      "display_name": "Starter Plan",
+      "monthly_price": 9900,
+      "annual_price": 99000,
+      "max_students": 100,
+      "max_teachers": 10,
+      "features": ["basic_attendance", "grade_management", "messaging"],
+      "support_level": "email",
+      "trial_days": 30
+    },
+    {
+      "id": 2,
+      "name": "professional",
+      "display_name": "Professional Plan",
+      "monthly_price": 29900,
+      "annual_price": 299000,
+      "max_students": 1000,
+      "max_teachers": 50,
+      "features": ["all_starter_features", "health_records", "bulk_import", "api_access"],
+      "support_level": "email_phone",
+      "trial_days": 30
+    },
+    {
+      "id": 3,
+      "name": "enterprise",
+      "display_name": "Enterprise Plan",
+      "monthly_price": "custom",
+      "annual_price": "custom",
+      "max_students": "unlimited",
+      "max_teachers": "unlimited",
+      "features": ["all_features", "custom_development", "dedicated_support"],
+      "support_level": "24/7",
+      "trial_days": 0
+    }
+  ],
+  "currency": "NGN",
+  "note": "Government schools get ₦9,900/month special pricing"
+}
+```
+
+**Implementation:**
+- Responsive pricing table/cards
+- Feature comparison
+- "Get Started" buttons per tier
+- FAQ section
+- Trial info
+- Contact sales for enterprise
+
+### 9.2 Subscription Management (School Admin)
+**Endpoints:**
+- GET /api/billing/subscriptions/current/ - Current subscription
+- GET /api/billing/subscriptions/ - Subscription history
+- POST /api/billing/subscriptions/ - Create new subscription
+
+**Display:**
+- Current tier name and status
+- Features included
+- Max students/teachers
+- Monthly cost
+- Renewal date
+- Billing cycle (monthly/annual)
+- Support level
+
+**Implementation:**
+- Subscription status card
+- Feature list with usage indicators
+- Upgrade/downgrade button
+- Cancel button
+
+### 9.3 Upgrade/Downgrade
+**Endpoint:** POST /api/billing/upgrade/
+**Fields:**
+- new_tier_id (select new tier)
+- payment_frequency (monthly/annual)
+- promo_code (optional)
+
+**Response:**
+- New pricing
+- Effective date
+- Promo discount (if applied)
+- Payment details
+
+**Implementation:**
+- Select new tier
+- Show price difference
+- Apply promo code
+- Show prorated charges/credits
+- Confirm upgrade
+- Process payment
+
+### 9.4 Stripe Payment Integration
+**Endpoint:** POST /api/billing/stripe-payment/
+**Fields:**
+- tier_id
+- payment_frequency
+- stripeToken (from Stripe.js)
+
+**Integration Steps:**
+1. Load Stripe.js library
+2. Create Stripe card element on payment form
+3. When submit clicked, tokenize card with Stripe.createToken()
+4. Send token to backend endpoint
+5. Backend processes payment and creates subscription
+6. Show confirmation page
+
+**Implementation:**
+- Stripe embedded form
+- Card input fields
+- Billing address (optional)
+- Submit button
+- Loading state during payment
+- Success/error message
+- Redirect to subscription page on success
+
+### 9.5 Payment History
+**Endpoint:** GET /api/billing/payment-history/
+**Display:**
+- All payments made
+- Payment date
+- Amount
+- Payment method
+- Status (Pending, Completed, Failed)
+- Invoice link
+
+**Filters:** Date range, status
+
+**Implementation:**
+- Payment history table
+- Sort by date
+- Download invoices
+- Print receipts
+
+### 9.6 Invoices
+**Endpoint:** GET /api/billing/invoices/
+**Display:**
+- Invoice number
+- Issue date
+- Due date
+- Amount
+- Status (Paid, Overdue, Pending)
+- Action: View details, download PDF, print
+
+**Implementation:**
+- Invoice list table
+- View PDF invoice
+- Print invoice
+- Download invoice
+- Email invoice (optional)
+
+### 9.7 Cancel Subscription
+**Endpoint:** POST /api/billing/cancel/
+**Fields:**
+- reason (optional)
+
+**Implementation:**
+- Confirm cancellation dialog
+- Ask for cancellation reason
+- Show what will happen (data access, timeline)
+- Confirm button
+- Show cancellation confirmation page
+
+---
+
+## 10. GOVERNMENT FEATURES
+
+### 10.1 Ministry Dashboard (Government Overview)
+**Endpoints:**
+- GET /api/government/dashboard/ministry/ - Ministry dashboard
+- GET /api/government/dashboard/ministry/alerts/ - Ministry alerts
+
+**Display:**
+- State name, country, currency
+- Total schools in state
+- Schools live, schools pending, schools inactive
+- Total students in state
+- Total teachers in state
+- Average deployment time (days)
+- Financial summary (fees collected, outstanding, collection %)
+- Compliance status
+- Alerts (low collection rate, missing data, overdue payments)
+- Top performing schools (by collection rate)
+
+**Filters:**
+- State (auto-filtered for ministry admins)
+- Date range
+
+**Alerts Display:**
+- Alert level (Critical, Warning, Info)
+- Alert type (Collection Rate, Compliance, Deployment)
+- Metric value vs threshold
+- Recommended action
+- School affected
+
+**Implementation:**
+- Dashboard with metric cards
+- Charts for financial trends
+- Alert notifications
+- School performance comparison
+- Quick action links
+
+### 10.2 Audit Logs
+**Endpoint:** GET /api/government/audit-logs/
+**Access:** Ministry Admin, Superadmin
+**Display:**
+- User who performed action
+- Action type (Create, Update, Delete, Login, Logout, Payment, etc.)
+- Timestamp
+- Resource affected (Student, Fee, School, etc.)
+- Changes made (before/after values for updates)
+- IP address (if tracked)
+
+**Filters:**
+- User (select user)
+- Action type
+- Resource type
+- Date range
+- School (if superadmin)
+
+**Sorting:** By timestamp (descending by default)
+
+**Export:** CSV, PDF
+
+**Implementation:**
+- Audit log table with all columns
+- Filter controls
+- Search by user/action
+- Date range picker
+- Export buttons
+- Detail view for each log entry
+
+### 10.3 Finance Reports (Government)
+**Endpoint:** GET /api/government/reports/finance/
+**Access:** Ministry Admin (own state), Superadmin (all states)
+**Display:**
+- Total fees collected vs outstanding
+- Collection rate by school
+- Outstanding fees by school
+- Fee structure analyzed
+- Payment trends over time
+- Top performing schools
+- Schools with low collection rate (alerts)
+
+**Filters:**
+- State (auto-filtered for ministry)
+- Date range
+- School
+
+**Export:** Reports in CSV, PDF, Excel
+
+**Implementation:**
+- Finance report with charts
+- School-by-school breakdown
+- Collection trends
+- Export functionality
+- Print report
+
+### 10.4 Compliance Reports
+**Endpoint:** GET /api/government/reports/compliance/
+**Access:** Ministry Admin (own state), Superadmin (all states)
+**Display:**
+- School compliance status
+- Missing data (incomplete profiles, missing records)
+- Policy violations
+- System usage metrics
+- Data quality score
+
+**Filters:**
+- State
+- Compliance level
+- Date range
+
+**Implementation:**
+- Compliance report with metrics
+- School compliance checklist
+- Missing data alerts
+- Corrective action tracking
+
+### 10.5 Payment Approval Workflow
+**Endpoints:**
+- GET /api/government/payments/requests/ - List pending payments
+- GET /api/government/payments/thresholds/ - Approval thresholds
+- POST /api/government/payments/requests/<id>/approve/ - Approve payment
+- POST /api/government/payments/requests/<id>/reject/ - Reject payment
+
+**Display:**
+- Pending payment requests
+- Amount
+- Requesting school
+- Approval threshold
+- Approval chain status
+- Action buttons: Approve, Reject
+
+**Implementation:**
+- Payment request list with details
+- Approval dialog with reason (for rejection)
+- Approval chain visualization
+- History of approvals
+- Send notifications on approval/rejection
+
+### 10.6 User Access Logs
+**Endpoint:** GET /api/government/access-logs/
+**Access:** Ministry Admin, Superadmin
+**Display:**
+- Login history
+- User name and role
+- Login date/time
+- Location (if tracked)
+- IP address (if tracked)
+- Login status (successful/failed)
+
+**Filters:**
+- User
+- Date range
+- Login status
+- Role
+
+**Implementation:**
+- Access log table
+- Filter controls
+- Search by user
+- Export logs
+- Suspicious activity alerts
+
+---
+
+## 11. HEALTH RECORDS
+
+### 11.1 Student Health Records
+**Endpoint:** GET /api/health/records/, POST /api/health/records/, PUT /api/health/records/<id>/, DELETE /api/health/records/<id>/
+**Fields:**
+- student (select student)
+- record_date (date of medical event)
+- medical_issue (description of issue)
+- treatment (treatment provided)
+- doctor_name (doctor's name)
+- notes (additional notes)
+
+**Display:**
+- Chronological list of health records
+- Medical issue summary
+- Treatment provided
+- Doctor information
+- Date of record
+
+**Implementation:**
+- Form to add health record
+- Health history list
+- Edit/delete record
+- Print health record
+
+---
+
+## 12. NOTIFICATIONS & MESSAGING
+
+### 12.1 Messages / Inbox
+**Endpoint:** GET /api/messages/inbox/
+**Display:**
+- Received messages
+- Sender name and role
+- Message preview
+- Date/time
+- Read status (unread messages marked)
+- Subject line (if applicable)
+
+**Sorting:** By date (newest first), unread first
+
+**Implementation:**
+- Inbox list view
+- Mark as read/unread
+- Delete message
+- Search messages
+- Click to view full message
+
+### 12.2 Compose Message
+**Endpoint:** POST /api/messages/
+**Fields:**
+- receiver_id (select recipient)
+- content (message text)
+- student_id (optional, if message about a specific student)
+
+**Implementation:**
+- Compose form
+- Recipient dropdown/search
+- Message text area
+- Submit button
+- Confirmation message
+
+### 12.3 Read Message / Thread View
+**Display:**
+- Full message content
+- Sender info
+- Recipient info
+- Date/time
+- Reply button
+
+**Actions:**
+- Mark as read
+- Delete
+- Reply
+- Forward (optional)
+
+**Implementation:**
+- Message detail view
+- Reply form
+- Message thread display (if conversations)
+
+### 12.4 Sent Messages / Outbox
+**Endpoint:** GET /api/messages/outbox/
+**Display:**
+- Sent messages
+- Recipient name
+- Message preview
+- Date/time
+- Read status (show if recipient read)
+
+**Implementation:**
+- Outbox list view
+- Similar to inbox
+- Show read/unread by recipient
+
+### 12.5 Unread Count
+**Endpoint:** GET /api/messages/unread_count/
+**Display:** Notification badge with count of unread messages
+**Implementation:**
+- Update unread count in navigation
+- Show badge with number
+- Update in real-time (optional, via polling or websockets)
+
+### 12.6 AI Insights / Risk Alerts
+**Endpoint:** GET /api/ai-insights/
+**Display:**
+- At-risk students list
+- Risk level (High, Medium, Low)
+- Reasons for risk:
+  - Attendance risk (low attendance %, days absent)
+  - Performance risk (low grades, failing subjects)
+  - Flagged subjects (underperforming subjects)
+- Recommendations (attend more, get tutoring, parent meeting, etc.)
+
+**Fields displayed:**
+- Student name
+- Admission number
+- Classroom
+- Attendance percentage
+- Average grade
+- Days absent
+- Low attendance flag
+- Low performance flag
+- Flagged subjects
+
+**Implementation:**
+- Risk alert dashboard
+- Risk level color indicators
+- Student list sorted by risk
+- Recommendations display
+- Action buttons (send message, schedule meeting, etc.)
+
+---
+
+## 13. PLATFORM & BRANDING
+
+### 13.1 School Branding (Public View)
+**Endpoint:** GET /api/platform/branding/
+**Access:** Public (no authentication)
+**Display:**
+- School name
+- Logo
+- Primary and secondary colors
+- Website link
+- Timezone and language info
+
+**Implementation:**
+- Used for rendering school-specific branding on public pages
+- Applied to login page, announcements, etc.
+
+### 13.2 School Branding Admin (Schools Can Edit)
+**Endpoints:**
+- GET /api/platform/branding-admin/ - Current branding
+- PUT /api/platform/branding-admin/ - Update branding
+
+**Fields (Editable):**
+- Logo (file upload)
+- Primary color (color picker)
+- Secondary color (color picker)
+- Language (select)
+- Timezone (select)
+- Website (text input)
+
+**Implementation:**
+- Branding form
+- Logo upload with preview
+- Color picker for colors
+- Save changes
+- Preview changes before saving
+
+### 13.3 School Profile & Settings
+**Endpoint:** GET /api/schools/<school_id>/profile/, PUT /api/schools/<school_id>/profile/
+**Display:**
+- School name
+- Email
+- Phone
+- Address
+- City
+- State
+- Country
+- Postal code
+- Timezone
+- Language
+- School type
+- Region
+- Established year
+- Is active (status)
+
+**Edit Permissions:** School Admin (own school), Superadmin
+
+**Implementation:**
+- Profile view with all info
+- Edit form for school settings
+- Save changes
+- Validation of inputs
+
+---
+
+## 14. BULK IMPORT
+
+### 14.1 Bulk Import Users
+**Endpoint:** POST /api/bulk-import/users/
+**CSV Format:**
+```
+email, first_name, last_name, role, password (optional), school_id (optional)
+teacher1@school.com, John, Doe, teacher, SecurePass123, 1
+student1@school.com, Jane, Smith, student, StudentPass123, 1
+parent1@email.com, Robert, Smith, parent, , 
+bursar1@school.com, Mary, Johnson, bursar, BursarPass123, 1
+```
+
+**Roles:** student, teacher, parent, bursar, school_admin, ministry_admin
+
+**Response:**
+```json
+{
+  "message": "Bulk import completed",
+  "total_rows": 100,
+  "success_count": 98,
+  "failed_count": 2,
+  "errors": [
+    {"row": 5, "error": "Duplicate email: teacher1@school.com"},
+    {"row": 12, "error": "Invalid role: 'admin'"}
+  ],
+  "created_users": 98
+}
+```
+
+**Implementation:**
+- CSV file upload (drag-drop or file picker)
+- Preview parsed CSV
+- Show headers and first few rows
+- Validate before import
+- Show validation errors
+- Proceed with import
+- Show progress bar
+- Display results summary
+- Download error report (if any errors)
+
+### 14.2 Bulk Import Schools
+**Endpoint:** POST /api/bulk-import/schools/
+**CSV Format:**
+```
+name, subdomain, email, phone, address, city, state, country, school_type
+Lagos International School, lsi-school-1, admin@lsi.com, 08012345678, 123 Road, Lagos, Lagos, Nigeria, private
+Abuja Secondary School, ass-school-1, admin@ass.com, 09012345678, 456 Road, Abuja, FCT, Nigeria, public
+```
+
+**Response:** Similar to user import
+
+**Implementation:**
+- Similar to user import
+- CSV upload
+- Preview data
+- Validation
+- Import with progress
+- Results summary
+
+---
+
+## 15. SETTINGS & EXPORT
+
+### 15.1 General Settings
+**Endpoint:** GET /api/settings/, PUT /api/settings/
+**Fields:**
+- school_name
+- language
+- timezone
+- currency
+- academic_year (e.g., "2024/2025")
+- term_start_date
+- term_end_date
+- grading_scale (A-F, percentage ranges, etc.)
+
+**Implementation:**
+- Settings form with all fields
+- Save changes
+- Validation
+- Confirmation messages
+
+### 15.2 Data Export
+**Endpoint:** GET /api/export/
+**Export Options:**
+- Students (all or filtered)
+- Teachers
+- Fees (all or by student/classroom)
+- Attendance (date range)
+- Grades (by exam or term)
+- Reports (financial, compliance)
+- User access logs
+- Audit logs
+
+**Formats:** CSV, PDF, Excel
+
+**Implementation:**
+- Export menu with options
+- Select data to export
+- Select format
+- Download file
+- Generate PDF with formatting/styling
+- Include headers and metadata
+
+---
+
+## 16. INTERNATIONALIZATION (i18n)
+
+### 16.1 Language Settings
+**Endpoint:** GET /api/i18n/languages/
+**Response:**
+```json
+[
+  {"code": "en", "name": "English"},
+  {"code": "yo", "name": "Yoruba"},
+  {"code": "ha", "name": "Hausa"},
+  {"code": "ig", "name": "Igbo"},
+  {"code": "fr", "name": "Français"}
+]
+```
+
+**Implementation:**
+- Display available languages
+- Language selector in settings
+- Apply language preference
+
+### 16.2 Set User Language
+**Endpoint:** POST /api/i18n/set-language/
+**Fields:**
+- language_code (e.g., "en", "fr", "yo")
+
+**Implementation:**
+- Language selector dropdown
+- Save preference
+- Reload UI in selected language
+- Store preference in backend
+
+---
+
+## TECHNICAL REQUIREMENTS
+
+### Frontend Stack (Recommended)
+- **Framework:** React, Vue 3, or Angular
+- **Styling:** Tailwind CSS, Bootstrap, or Material UI
+- **State Management:** Redux, Vuex, or Context API
+- **HTTP Client:** Axios or Fetch API
+- **Authentication:** JWT tokens (store securely)
+- **Charts/Graphs:** Chart.js, ApexCharts, or D3.js
+- **Form Handling:** React Hook Form or Formik
+
+### API Integration Requirements
+- **Base URL:** http://localhost:8000/api/ (development) or production URL
+- **Authentication:** All requests (except auth) require `Authorization: Bearer <token>` header
+- **Content-Type:** application/json for all POST/PUT requests
+- **Error Handling:** Handle 400, 403, 404, 500 errors with user-friendly messages
+- **Pagination:** Implement pagination for list endpoints (page_size=50 default)
+- **Filtering:** Support filters for list endpoints (e.g., ?status=active&classroom=1)
+- **Sorting:** Support sorting (e.g., ?ordering=-created_at)
+
+### Browser Support
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
+- Mobile browsers (iOS Safari, Chrome Android)
+
+### Performance Requirements
+- Page load time < 3 seconds
+- API response time < 2 seconds
+- Implement caching for static data
+- Lazy load images and components
+- Minify and compress assets
+
+### Security Requirements
+- Store JWT token securely (httpOnly cookies preferred)
+- Validate all inputs before submission
+- Sanitize HTML content
+- Use HTTPS in production
+- Implement CSRF protection
+- Implement rate limiting for authentication endpoints
+- Log security events
+
+### Accessibility Requirements
+- WCAG 2.1 Level AA compliance
+- Keyboard navigation support
+- Screen reader compatibility
+- Color contrast ratios
+- Alt text for images
+- Form labels and error messages
+
+---
+
+## DEPLOYMENT & ENVIRONMENT
+
+### Environment Variables
+```
+REACT_APP_API_BASE_URL=http://localhost:8000/api/
+REACT_APP_ENV=development | production
+REACT_APP_STRIPE_KEY=your_stripe_public_key
+REACT_APP_VERSION=1.0.0
+```
+
+### Build & Deploy
+- Build: `npm run build` or equivalent
+- Deploy to: AWS S3 + CloudFront, Vercel, Netlify, etc.
+- Setup CI/CD pipeline (GitHub Actions, GitLab CI, etc.)
+- Configure CORS with backend domain
+- Setup error tracking (Sentry, LogRocket, etc.)
+
+---
+
+END OF FRONTEND EXPECTATIONS DOCUMENT
