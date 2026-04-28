@@ -8,7 +8,7 @@ import io
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from apps.schools.models import School
-from altixedu.audit import log_action
+from audit import log_action
 import logging
 
 logger = logging.getLogger(__name__)

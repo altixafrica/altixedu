@@ -8,9 +8,13 @@ class IsParent(permissions.BasePermission):
 
 
 class IsSchoolAdmin(permissions.BasePermission):
-    """Only allow school admins to access."""
+    """Allow school admins and superadmins to access school-control endpoints."""
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role == 'admin'
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.role in ['admin', 'superadmin']
+        )
 
 
 class IsSuperAdmin(permissions.BasePermission):

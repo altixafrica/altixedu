@@ -6,6 +6,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Q, Sum, Avg, Count, F
 from django_filters.rest_framework import DjangoFilterBackend
@@ -44,22 +45,63 @@ from .serializers import (
 # PERMISSIONS
 # ============================================================================
 
+ROLE_GROUP_ALIASES = {
+    # GOVERNMENT LEVEL
+    'super_admin': 'superadmin',           # Alternative to superadmin
+    
+    # SCHOOL LEVEL
+    'school_admin': 'admin',               # Alternative to admin (principal)
+    'principal': 'admin',                  # Principal is school admin
+    
+    # FINANCE ROLES (both are bursar)
+    'finance_officer': 'bursar',           # Finance officer = bursar (school finance)
+}
+
+
+def user_has_role(user, *roles):
+    """
+    Support both Django auth groups and the platform's custom user.role field.
+    """
+    if not user or not user.is_authenticated:
+        return False
+
+    user_role = getattr(user, 'role', None)
+    normalized_roles = {ROLE_GROUP_ALIASES.get(role, role) for role in roles}
+    if user_role in normalized_roles:
+        return True
+
+    return user.groups.filter(name__in=roles).exists()
+
+
+def get_user_access_role(user):
+    if not user or not user.is_authenticated:
+        return 'unknown'
+
+    if getattr(user, 'role', None):
+        return user.role
+
+    if user.groups.exists():
+        return user.groups.first().name
+
+    return 'unknown'
+
+
 class IsMinistryAdmin(permissions.BasePermission):
-    """Only ministry admins can view ministry dashboard."""
+    """Only ministry admins and superadmins can view ministry dashboard."""
     def has_permission(self, request, view):
-        return request.user and request.user.groups.filter(name='ministry_admin').exists()
+        return user_has_role(request.user, 'ministry_admin', 'superadmin')
 
 
 class IsBursar(permissions.BasePermission):
     """Only bursars can create/approve payments."""
     def has_permission(self, request, view):
-        return request.user and request.user.groups.filter(name='bursar').exists()
+        return user_has_role(request.user, 'bursar', 'superadmin')
 
 
 class IsSchoolAdmin(permissions.BasePermission):
     """Only school admins can access school-specific data."""
     def has_permission(self, request, view):
-        return request.user and request.user.groups.filter(name='school_admin').exists()
+        return user_has_role(request.user, 'admin', 'superadmin')
 
 
 # ============================================================================
@@ -108,14 +150,14 @@ class MinistryDashboardViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         
         # Super admin can see all states
-        if user.groups.filter(name='super_admin').exists():
+        if user_has_role(user, 'superadmin'):
             return MinistryDashboardAggregation.objects.all()
         
         # Ministry admin can see only their assigned state
-        if user.groups.filter(name='ministry_admin').exists():
+        if user_has_role(user, 'ministry_admin'):
             if hasattr(user, 'ministry') and user.ministry:
                 return MinistryDashboardAggregation.objects.filter(
-                    state=user.ministry.state
+                    state=user.ministry.state_or_province
                 )
             else:
                 # Ministry admin without ministry assignment - no access
@@ -196,20 +238,20 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         
         # Super admin sees all
-        if user.groups.filter(name='super_admin').exists():
+        if user_has_role(user, 'super_admin'):
             return AuditLog.objects.all()
         
         # School admin sees own school
-        if user.groups.filter(name='school_admin').exists():
-            return AuditLog.objects.filter(user_school__admin=user)
+        if user_has_role(user, 'school_admin'):
+            return AuditLog.objects.filter(user_school=user.school)
         
         # Financial users see financial actions
-        if user.groups.filter(name__in=['bursar', 'finance_officer']).exists():
+        if user_has_role(user, 'bursar', 'finance_officer'):
             financial_actions = ['payment_create', 'payment_update', 'payment_approve',
                                'payment_reject', 'expense_create', 'expense_approve']
             return AuditLog.objects.filter(
                 Q(action_type__in=financial_actions) &
-                Q(user_school__staff__user=user)
+                Q(user_school=user.school)
             )
         
         # Default: no access
@@ -261,6 +303,30 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
             'message': 'Excel export - implement using openpyxl'
         })
 
+    @action(detail=False, methods=['get'], url_path='export')
+    def export_csv(self, request):
+        """Export audit logs as CSV for admin downloads."""
+        queryset = self.filter_queryset(self.get_queryset())
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="audit-logs.csv"'
+
+        import csv
+        writer = csv.writer(response)
+        writer.writerow(['created_at', 'user_email', 'user_role', 'action_type', 'object_name', 'approval_status'])
+
+        for log in queryset[:5000]:
+            writer.writerow([
+                log.created_at.isoformat() if log.created_at else '',
+                getattr(log, 'user_email', ''),
+                getattr(log, 'user_role', ''),
+                getattr(log, 'action_type', ''),
+                getattr(log, 'object_name', ''),
+                getattr(log, 'approval_status', ''),
+            ])
+
+        return response
+
 
 # ============================================================================
 # 3. FINANCE REPORTS API
@@ -288,16 +354,16 @@ class FinanceReportViewSet(viewsets.ModelViewSet):
         """Filter based on user role."""
         user = self.request.user
         
-        if user.groups.filter(name='super_admin').exists():
+        if user_has_role(user, 'super_admin'):
             return FinanceReport.objects.all()
         
         # School bursar sees own school
-        if user.groups.filter(name='bursar').exists():
-            return FinanceReport.objects.filter(school__staff__user=user)
+        if user_has_role(user, 'bursar', 'finance_officer'):
+            return FinanceReport.objects.filter(school=user.school)
         
-        # Principal sees own school
-        if user.groups.filter(name='principal').exists():
-            return FinanceReport.objects.filter(school__principal__user=user)
+        # Admin sees own school
+        if user_has_role(user, 'admin'):
+            return FinanceReport.objects.filter(school=user.school)
         
         return FinanceReport.objects.none()
     
@@ -374,17 +440,17 @@ class ComplianceReportViewSet(viewsets.ModelViewSet):
         """Filter based on role."""
         user = self.request.user
         
-        if user.groups.filter(name='super_admin').exists():
+        if user_has_role(user, 'super_admin'):
             return ComplianceReport.objects.all()
         
         # Ministry admin sees all schools in their state
-        if user.groups.filter(name='ministry_admin').exists():
-            state = getattr(user, 'state', None)
+        if user_has_role(user, 'ministry_admin'):
+            state = user.ministry.state_or_province if getattr(user, 'ministry', None) else None
             if state:
                 return ComplianceReport.objects.filter(state=state)
         
         # School staff sees own school
-        return ComplianceReport.objects.filter(school__staff__user=user)
+        return ComplianceReport.objects.filter(school=user.school)
     
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
@@ -408,7 +474,7 @@ class ComplianceReportViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         """Approve submitted report (ministry admin only)."""
-        if not request.user.groups.filter(name='ministry_admin').exists():
+        if not user_has_role(request.user, 'ministry_admin', 'superadmin'):
             return Response(
                 {'error': 'Only ministry admins can approve'},
                 status=status.HTTP_403_FORBIDDEN
@@ -591,9 +657,9 @@ class PaymentApprovalThresholdViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """School admins see only their school thresholds."""
         user = self.request.user
-        if user.groups.filter(name='super_admin').exists():
+        if user_has_role(user, 'superadmin'):
             return PaymentApprovalThreshold.objects.all()
-        return PaymentApprovalThreshold.objects.filter(school__admin=user)
+        return PaymentApprovalThreshold.objects.filter(school=user.school)
 
 
 class PaymentRequestViewSet(viewsets.ModelViewSet):
@@ -618,11 +684,11 @@ class PaymentRequestViewSet(viewsets.ModelViewSet):
         """Filter based on user role and school."""
         user = self.request.user
         
-        if user.groups.filter(name='super_admin').exists():
+        if user_has_role(user, 'superadmin'):
             return PaymentRequest.objects.all()
         
         # School staff sees own school requests
-        return PaymentRequest.objects.filter(school__staff__user=user)
+        return PaymentRequest.objects.filter(school=user.school)
     
     def create(self, request, *args, **kwargs):
         """Create new payment request."""
@@ -726,7 +792,7 @@ class PaymentRequestViewSet(viewsets.ModelViewSet):
         AuditLog.objects.create(
             user=request.user,
             user_email=request.user.email,
-            user_role=request.user.groups.first().name if request.user.groups.exists() else 'unknown',
+            user_role=get_user_access_role(request.user),
             action_type='payment_approve',
             action_description=f'Approved payment request {payment_request.id}',
             content_type='PaymentRequest',
@@ -764,7 +830,7 @@ class PaymentRequestViewSet(viewsets.ModelViewSet):
         AuditLog.objects.create(
             user=request.user,
             user_email=request.user.email,
-            user_role=request.user.groups.first().name if request.user.groups.exists() else 'unknown',
+            user_role=get_user_access_role(request.user),
             action_type='payment_reject',
             action_description=f'Rejected payment request {payment_request.id}',
             content_type='PaymentRequest',
@@ -781,7 +847,7 @@ class PaymentRequestViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def pending_approvals(self, request):
         """Get all payment requests awaiting this user's approval."""
-        user_role = request.user.groups.first().name if request.user.groups.exists() else None
+        user_role = get_user_access_role(request.user)
         
         pending = PaymentRequest.objects.filter(
             current_approver_role=user_role,
@@ -814,16 +880,16 @@ class RolePermissionGroupViewSet(viewsets.ModelViewSet):
         """Filter based on user role."""
         user = self.request.user
         
-        if user.groups.filter(name='super_admin').exists():
+        if user_has_role(user, 'super_admin'):
             return RolePermissionGroup.objects.all()
         
         # School admin sees own school's permission groups
-        return RolePermissionGroup.objects.filter(school__admin=user)
+        return RolePermissionGroup.objects.filter(school=user.school)
     
     @action(detail=False, methods=['get'])
     def my_permissions(self, request):
         """Get current user's permissions."""
-        user_role = request.user.groups.first().name if request.user.groups.exists() else None
+        user_role = get_user_access_role(request.user)
         school_id = request.query_params.get('school_id')
         
         try:
@@ -858,11 +924,11 @@ class UserAccessLogViewSet(viewsets.ReadOnlyModelViewSet):
         """Filter based on role."""
         user = self.request.user
         
-        if user.groups.filter(name='super_admin').exists():
+        if user_has_role(user, 'super_admin'):
             return UserAccessLog.objects.all()
         
         # School admin sees access logs for their school
-        return UserAccessLog.objects.filter(school__admin=user)
+        return UserAccessLog.objects.filter(school=user.school)
     
     @action(detail=False, methods=['get'])
     def denied_access(self, request):

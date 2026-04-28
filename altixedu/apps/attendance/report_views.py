@@ -2,6 +2,8 @@
 Views for CSV Import and Attendance Report Generation
 """
 
+import csv
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,12 +11,14 @@ from rest_framework.permissions import IsAuthenticated
 from django.http import HttpResponse
 from datetime import datetime
 
+from apps.accounts.models import User
 from apps.accounts.permissions import IsSchoolAdmin
+from apps.accounts.role_models import ParentStudentLink, StudentClassroomAssignment
 from apps.academics.models import Classroom
 from apps.students.models import Student
-from altixedu.bulk_import import BulkUserImporter, BulkUserImportError, get_csv_template
-from altixedu.report_generation import AttendanceReportGenerator
-from altixedu.audit import log_action
+from bulk_import import BulkUserImporter, BulkUserImportError, get_csv_template
+from report_generation import AttendanceReportGenerator
+from audit import log_action
 
 
 class BulkImportViewSet(viewsets.ViewSet):
@@ -91,6 +95,90 @@ class BulkImportViewSet(viewsets.ViewSet):
         response = HttpResponse(template, content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="user_import_template.csv"'
         
+        return response
+
+    @action(detail=False, methods=['get'])
+    def export_users(self, request):
+        """Export school users as CSV."""
+        rows = User.objects.filter(school=request.user.school).order_by('role', 'last_name', 'first_name')
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="school_users.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'role', 'phone', 'is_active', 'school_id'
+        ])
+        for user in rows:
+            writer.writerow([
+                user.id,
+                user.username,
+                user.email,
+                user.first_name,
+                user.last_name,
+                user.role,
+                user.phone or '',
+                'true' if user.is_active else 'false',
+                user.school_id or '',
+            ])
+
+        return response
+
+    @action(detail=False, methods=['get'])
+    def export_parent_links(self, request):
+        """Export parent-student links as CSV."""
+        rows = ParentStudentLink.objects.filter(
+            student__school=request.user.school
+        ).select_related('parent', 'student').order_by('student__last_name', 'student__first_name')
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="parent_student_links.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'id', 'parent_id', 'parent_name', 'student_id', 'student_name',
+            'relationship', 'is_primary', 'is_active'
+        ])
+        for row in rows:
+            writer.writerow([
+                row.id,
+                row.parent_id,
+                row.parent.get_full_name(),
+                row.student_id,
+                str(row.student),
+                row.relationship,
+                'true' if row.is_primary else 'false',
+                'true' if row.is_active else 'false',
+            ])
+
+        return response
+
+    @action(detail=False, methods=['get'])
+    def export_classroom_assignments(self, request):
+        """Export classroom assignments as CSV."""
+        rows = StudentClassroomAssignment.objects.filter(
+            student__school=request.user.school
+        ).select_related('student', 'classroom').order_by('academic_year', 'classroom__name', 'roll_number')
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="classroom_assignments.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'id', 'student_id', 'student_name', 'classroom_id', 'classroom_name',
+            'academic_year', 'roll_number', 'is_active', 'assigned_date'
+        ])
+        for row in rows:
+            writer.writerow([
+                row.id,
+                row.student_id,
+                str(row.student),
+                row.classroom_id,
+                row.classroom.name,
+                row.academic_year,
+                row.roll_number,
+                'true' if row.is_active else 'false',
+                row.assigned_date,
+            ])
+
         return response
 
 

@@ -11,6 +11,7 @@ This middleware:
 from django.utils.deprecation import MiddlewareMixin
 from django.http import JsonResponse
 from apps.schools.models import School
+import ipaddress
 
 
 class SubdomainTenantMiddleware(MiddlewareMixin):
@@ -101,6 +102,12 @@ class SubdomainTenantMiddleware(MiddlewareMixin):
         - 'localhost' -> None
         - 'localhost:8000' -> None
         """
+        try:
+            ipaddress.ip_address(host)
+            return None
+        except ValueError:
+            pass
+
         parts = host.split('.')
         
         # If only one part (localhost) or two parts (example.com), no subdomain

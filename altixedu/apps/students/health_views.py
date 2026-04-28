@@ -19,7 +19,7 @@ from apps.students.health_serializers import (
     HealthMetricSerializer
 )
 from apps.accounts.permissions import IsSchoolAdmin, IsTeacher
-from altixedu.audit import log_action
+from audit import log_action
 
 
 class StudentHealthRecordViewSet(viewsets.ModelViewSet):

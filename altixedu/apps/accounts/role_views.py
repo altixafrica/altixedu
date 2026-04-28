@@ -22,9 +22,9 @@ from apps.accounts.role_serializers import (
 )
 from apps.accounts.permissions import IsSchoolAdmin, IsSuperAdmin
 from apps.students.models import Student, StudentParent
-from altixedu.audit import log_action
-from altixedu.bulk_import import BulkUserImporter
-from altixedu.report_generation import AttendanceReportGenerator
+from audit import log_action
+from bulk_import import BulkUserImporter
+from report_generation import AttendanceReportGenerator
 
 
 class CustomRoleViewSet(viewsets.ModelViewSet):

@@ -163,3 +163,6 @@ class Parent(models.Model):
         return Student.objects.filter(
             studentparent__parent=self.user
         ).distinct() if self.user else Student.objects.none()
+
+
+from .health_models import HealthMetric, StudentEmergencyContact, StudentHealthRecord  # noqa: E402,F401

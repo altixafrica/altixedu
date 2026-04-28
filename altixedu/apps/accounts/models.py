@@ -5,13 +5,18 @@ from apps.schools.models import School
 
 class User(AbstractUser):
     ROLE_CHOICES = (
-        ('superadmin', 'Super Admin'),
-        ('admin', 'School Admin'),
-        ('ministry_admin', 'Ministry Admin'),
+        # SCHOOL-LEVEL ROLES (user.school required)
+        ('admin', 'School Admin / Principal'),
         ('teacher', 'Teacher'),
         ('student', 'Student'),
         ('parent', 'Parent'),
-        ('bursar', 'Bursar'),
+        ('bursar', 'School Bursar / Finance Officer'),
+        
+        # GOVERNMENT-LEVEL ROLES (user.ministry assigned)
+        ('ministry_admin', 'Ministry Admin'),
+        
+        # PLATFORM-LEVEL ROLES (system-wide)
+        ('superadmin', 'Super Admin'),
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     school = models.ForeignKey(
@@ -51,3 +56,6 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.get_full_name()} ({self.role})"
+
+
+from .role_models import CustomRole, ParentStudentLink, RoleUserAssignment, StudentClassroomAssignment  # noqa: E402,F401

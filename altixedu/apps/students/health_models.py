@@ -5,7 +5,7 @@ Health and Medical Records Models for Students
 from django.db import models
 from apps.students.models import Student
 from apps.schools.models import School
-from altixedu.encryption import EncryptedField, EncryptedCharField
+from encryption import EncryptedField, EncryptedCharField
 
 
 class StudentHealthRecord(models.Model):

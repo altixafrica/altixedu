@@ -10,24 +10,48 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_list(name, default):
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-04552cmetpb=a+ezspgh(emzc0)pwdga2hkyajzvmilbu=r5@q'
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = _env_bool('DJANGO_DEBUG', True)  # Default to True for development
 
-ALLOWED_HOSTS = ['*']  # Allow all hosts in development
-# In production, set to specific hosts only
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-dev-only-change-me-before-production'
+    else:
+        raise ValueError(
+            'DJANGO_SECRET_KEY environment variable is required for production. '
+            'Generate one using: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"'
+        )
+
+ALLOWED_HOSTS = _env_list(
+    'DJANGO_ALLOWED_HOSTS',
+    ['localhost', '127.0.0.1', '[::1]'] if DEBUG else ['127.0.0.1', '.altixedu.com']
+)
 
 
 # Application definition
@@ -50,8 +74,8 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.schools',
     'apps.students',
-    'apps.teachers',  # ⭐ Teacher profiles and management
-    'apps.bursars',   # ⭐ Bursar (finance manager) profiles
+    'apps.teachers',  # Required for academics.Classroom and TeacherSubject relationships
+    'apps.bursars',   # Finance manager profiles
     'apps.academics',
     'apps.attendance',
     'apps.finance',
@@ -103,8 +127,12 @@ WSGI_APPLICATION = 'altixedu.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': os.getenv('DJANGO_DB_ENGINE', 'django.db.backends.sqlite3'),
+        'NAME': os.getenv('DJANGO_DB_NAME', str(BASE_DIR / 'db.sqlite3')),
+        'USER': os.getenv('DJANGO_DB_USER', ''),
+        'PASSWORD': os.getenv('DJANGO_DB_PASSWORD', ''),
+        'HOST': os.getenv('DJANGO_DB_HOST', ''),
+        'PORT': os.getenv('DJANGO_DB_PORT', ''),
     }
 }
 
@@ -131,9 +159,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = os.getenv('DJANGO_LANGUAGE_CODE', 'en-us')
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.getenv('DJANGO_TIME_ZONE', 'UTC')
 
 USE_I18N = True
 
@@ -143,7 +171,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = os.getenv('DJANGO_STATIC_URL', '/static/')
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = os.getenv('DJANGO_MEDIA_URL', '/media/')
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Custom User Model
 AUTH_USER_MODEL = 'accounts.User'
@@ -177,20 +208,26 @@ API_REQUESTS_WINDOW = 3600  # Time window in seconds (1 hour)
 # ============================================================================
 # ENCRYPTION CONFIGURATION
 # ============================================================================
-# Generate encryption key on first run
+# Generate encryption key on first run for local development
 from cryptography.fernet import Fernet
-import os
 
 _ENCRYPTION_KEY_FILE = os.path.join(BASE_DIR, '.encryption_key')
-if os.path.exists(_ENCRYPTION_KEY_FILE):
+ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
+if ENCRYPTION_KEY:
+    pass
+elif os.path.exists(_ENCRYPTION_KEY_FILE):
     with open(_ENCRYPTION_KEY_FILE, 'r') as f:
         ENCRYPTION_KEY = f.read().strip()
-else:
+elif DEBUG:
     # Generate new encryption key for development
     ENCRYPTION_KEY = Fernet.generate_key().decode()
     with open(_ENCRYPTION_KEY_FILE, 'w') as f:
         f.write(ENCRYPTION_KEY)
     os.chmod(_ENCRYPTION_KEY_FILE, 0o600)
+else:
+    raise RuntimeError(
+        'ENCRYPTION_KEY must be set when DJANGO_DEBUG is false.'
+    )
 
 # ============================================================================
 # AUDIT LOGGING CONFIGURATION
@@ -199,10 +236,16 @@ AUDIT_LOG_RETENTION_DAYS = 2555  # 7 years per compliance standards
 AUDIT_LOG_ENABLED = True  # Set to False to disable audit logging
 
 # ============================================================================
-# STRIPE CONFIGURATION (for Billing)
+# FLUTTERWAVE CONFIGURATION (for Billing)
 # ============================================================================
-STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', 'pk_test_placeholder_for_development')
-STRIPE_PUBLIC_KEY = os.getenv('STRIPE_PUBLIC_KEY', 'sk_test_placeholder_for_development')
+FLUTTERWAVE_BASE_URL = os.getenv(
+    'FLUTTERWAVE_BASE_URL',
+    'https://api.flutterwave.com/v3'
+)
+FLUTTERWAVE_SECRET_KEY = os.getenv('FLUTTERWAVE_SECRET_KEY', '')
+FLUTTERWAVE_PUBLIC_KEY = os.getenv('FLUTTERWAVE_PUBLIC_KEY', '')
+FLUTTERWAVE_SECRET_HASH = os.getenv('FLUTTERWAVE_SECRET_HASH', '')
+FRONTEND_APP_URL = os.getenv('FRONTEND_APP_URL', 'http://127.0.0.1:3000')
 
 # ============================================================================
 # REST FRAMEWORK CONFIGURATION
@@ -219,14 +262,31 @@ REST_FRAMEWORK = {
 # ============================================================================
 # CORS CONFIGURATION (for Frontend)
 # ============================================================================
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:8000',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173',
-]
+CORS_ALLOWED_ORIGINS = _env_list(
+    'DJANGO_CORS_ALLOWED_ORIGINS',
+    [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:4173',
+        'http://localhost:8000',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:4173',
+    ] if DEBUG else []
+)
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = _env_list(
+    'DJANGO_CSRF_TRUSTED_ORIGINS',
+    CORS_ALLOWED_ORIGINS
+)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = _env_bool('DJANGO_USE_X_FORWARDED_HOST', not DEBUG)
+SESSION_COOKIE_SECURE = _env_bool('DJANGO_SECURE_COOKIES', not DEBUG)
+CSRF_COOKIE_SECURE = _env_bool('DJANGO_SECURE_COOKIES', not DEBUG)
+SECURE_SSL_REDIRECT = _env_bool(
+    'DJANGO_SECURE_SSL_REDIRECT',
+    False if DEBUG else True
+)
 
 # ============================================================================
 # INTERNATIONALIZATION (i18n) CONFIGURATION

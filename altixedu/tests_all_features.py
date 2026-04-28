@@ -7,12 +7,16 @@ import json
 import csv
 import io
 from datetime import datetime, timedelta
+from decimal import Decimal
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 
+from apps.billing.models import BillingAlert, Invoice, PaymentTransaction, Subscription, SubscriptionTier, UpgradePromotion
 from apps.schools.models import School
 from apps.students.models import Student, StudentParent
 from apps.academics.models import Classroom, Subject
@@ -433,6 +437,128 @@ class AttendanceReportTests(APITestCase):
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response['Content-Type'], 'text/csv')
+
+
+class BillingPortfolioTests(APITestCase):
+    """Test cross-tenant billing operations visibility for superadmins."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.school = School.objects.create(name="Portfolio School")
+        self.superadmin = User.objects.create_user(
+            username="superadmin",
+            email="superadmin@altixedu.com",
+            password="SuperPass123!",
+            role="superadmin",
+        )
+        self.admin = User.objects.create_user(
+            username="portfolioadmin",
+            email="admin@portfolio.com",
+            password="AdminPass123!",
+            role="admin",
+            school=self.school,
+        )
+        self.tier = SubscriptionTier.objects.create(
+            name="growth",
+            display_name="Growth Plan",
+            monthly_price=25000,
+            annual_price=255000,
+            max_students=1200,
+            max_teachers=120,
+            support_level="phone",
+            trial_days=21,
+        )
+        self.subscription = Subscription.objects.create(
+            school=self.school,
+            tier=self.tier,
+            monthly_price=25000,
+            annual_price=255000,
+            payment_frequency="monthly",
+            status="active",
+            renewal_date=timezone.now() + timedelta(days=12),
+        )
+        PaymentTransaction.objects.create(
+            subscription=self.subscription,
+            amount=25000,
+            currency="NGN",
+            payment_method="flutterwave",
+            status="completed",
+            transaction_id="txn-portfolio-001",
+            completed_at=timezone.now(),
+        )
+        Invoice.objects.create(
+            subscription=self.subscription,
+            amount=25000,
+            invoice_number="INV-PORT-001",
+            due_at=timezone.now() - timedelta(days=2),
+            status="pending",
+        )
+        BillingAlert.objects.create(
+            subscription=self.subscription,
+            alert_type="renewal_upcoming",
+            message="Renewal due within the next two weeks.",
+            email_sent=True,
+        )
+        UpgradePromotion.objects.create(
+            code="LAUNCH20",
+            display_name="Launch 20",
+            promo_type="launch",
+            description="Introductory pricing for new schools.",
+            discount_percentage=20,
+            applicable_tiers=["growth"],
+            starts_at=timezone.now() - timedelta(days=1),
+            expires_at=timezone.now() + timedelta(days=7),
+            is_active=True,
+        )
+
+    def test_superadmin_can_view_billing_portfolio(self):
+        """Test that superadmins can access the billing portfolio endpoint."""
+        self.client.force_authenticate(user=self.superadmin)
+
+        response = self.client.get(reverse("billing:billing-portfolio"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["summary"]["active_subscriptions"], 1)
+        self.assertEqual(response.data["summary"]["overdue_invoices"], 1)
+        self.assertEqual(response.data["summary"]["active_promotions"], 1)
+        self.assertEqual(len(response.data["recent_transactions"]), 1)
+        self.assertEqual(len(response.data["watchlist"]), 1)
+
+
+class BillingCatalogSeedTests(TestCase):
+    """Test the default billing catalog seed command."""
+
+    def test_seed_billing_catalog_creates_expected_pricing(self):
+        call_command("seed_billing_catalog")
+
+        tiers = {
+            tier.name: tier
+            for tier in SubscriptionTier.objects.all()
+        }
+
+        self.assertEqual(len(tiers), 5)
+        self.assertEqual(tiers["starter"].monthly_price, Decimal("9900.00"))
+        self.assertEqual(tiers["starter"].annual_price, Decimal("99000.00"))
+        self.assertEqual(tiers["growth"].display_name, "Professional Plan")
+        self.assertEqual(tiers["growth"].monthly_price, Decimal("19900.00"))
+        self.assertEqual(tiers["growth"].annual_price, Decimal("199000.00"))
+        self.assertEqual(tiers["scale"].display_name, "Enterprise Plan")
+        self.assertEqual(tiers["scale"].monthly_price, Decimal("39900.00"))
+        self.assertEqual(tiers["scale"].annual_price, Decimal("399000.00"))
+        self.assertEqual(tiers["govt"].monthly_price, Decimal("9900.00"))
+        self.assertEqual(tiers["govt"].annual_price, Decimal("99000.00"))
+
+    def test_public_pricing_endpoint_returns_bulk_pricing_and_quarterly_amounts(self):
+        call_command("seed_billing_catalog")
+
+        response = self.client.get(reverse("billing:pricing-page"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        starter = next(tier for tier in response.data["tiers"] if tier["name"] == "starter")
+        self.assertEqual(starter["quarterly_price"], 28215.0)
+        self.assertEqual(response.data["government_bulk_pricing"][1]["discount_percentage"], 20)
+        self.assertEqual(response.data["government_bulk_pricing"][2]["discount_percentage"], 30)
+        self.assertEqual(response.data["government_bulk_pricing"][3]["discount_percentage"], 40)
 
 
 class MultiLanguageTests(APITestCase):

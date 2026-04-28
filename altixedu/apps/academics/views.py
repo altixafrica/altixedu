@@ -22,9 +22,9 @@ class ClassroomViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'superadmin':
-            return Classroom.objects.all()
+            return Classroom.objects.select_related('school').order_by('school__name', 'name')
         elif user.school:
-            return Classroom.objects.filter(school=user.school)
+            return Classroom.objects.filter(school=user.school).select_related('school').order_by('name')
         return Classroom.objects.none()
 
     def perform_create(self, serializer):
@@ -41,9 +41,9 @@ class SubjectViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'superadmin':
-            return Subject.objects.all()
+            return Subject.objects.select_related('school').order_by('school__name', 'name')
         elif user.school:
-            return Subject.objects.filter(school=user.school)
+            return Subject.objects.filter(school=user.school).select_related('school').order_by('name')
         return Subject.objects.none()
 
     def perform_create(self, serializer):

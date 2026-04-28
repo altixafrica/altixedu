@@ -15,9 +15,13 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from apps.students.views import StudentViewSet
+from apps.teachers.views import TeacherViewSet
+from apps.bursars.views import BursarViewSet
 from apps.academics.views import (
     ClassroomViewSet,
     SubjectViewSet,
@@ -29,6 +33,8 @@ from apps.accounts.views import (
     UserViewSet, 
     ParentDashboardView,
     BursarDashboardView,
+    StudentDashboardView,
+    TeacherDashboardView,
     LoginView,
     LogoutView,
     CurrentUserView,
@@ -37,17 +43,35 @@ from apps.accounts.views import (
     MinistryAdminLoginView,
     SchoolSetupView
 )
-from apps.schools.views import SchoolAdminDashboardView
+from apps.schools.views import SchoolAdminDashboardView, MinistryViewSet, SchoolViewSet, SchoolDirectoryViewSet
 from apps.attendance.views import AttendanceViewSet
+from apps.attendance.report_views import AttendanceReportViewSet, BulkImportViewSet
 from apps.finance.views import FeeViewSet, StudentFeeViewSet
 from apps.notifications.views import (
     MessageViewSet,
+    SchoolSettingViewSet,
     StudentAIInsightsViewSet,
     RoleSettingViewSet
+)
+from apps.students.health_views import (
+    HealthMetricViewSet,
+    StudentEmergencyContactViewSet,
+    StudentHealthRecordViewSet,
+)
+from apps.accounts.role_views import (
+    CustomRoleViewSet,
+    ParentStudentLinkViewSet,
+    RoleUserAssignmentViewSet,
+    StudentClassroomAssignmentViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'students', StudentViewSet, basename='students')
+router.register(r'teachers', TeacherViewSet, basename='teachers')
+router.register(r'bursars', BursarViewSet, basename='bursars')
+router.register(r'schools', SchoolViewSet, basename='schools')
+router.register(r'schools-directory', SchoolDirectoryViewSet, basename='schools-directory')
+router.register(r'ministries', MinistryViewSet, basename='ministries')
 router.register(r'classrooms', ClassroomViewSet, basename='classrooms')
 router.register(r'subjects', SubjectViewSet, basename='subjects')
 router.register(
@@ -64,6 +88,16 @@ router.register(r'student-fees', StudentFeeViewSet, basename='student-fees')
 router.register(r'messages', MessageViewSet, basename='messages')
 router.register(r'ai-insights', StudentAIInsightsViewSet, basename='ai-insights')
 router.register(r'role-settings', RoleSettingViewSet, basename='role-settings')
+router.register(r'school-settings', SchoolSettingViewSet, basename='school-settings')
+router.register(r'custom-roles', CustomRoleViewSet, basename='custom-roles')
+router.register(r'role-assignments', RoleUserAssignmentViewSet, basename='role-assignments')
+router.register(r'classroom-assignments', StudentClassroomAssignmentViewSet, basename='classroom-assignments')
+router.register(r'parent-student-links', ParentStudentLinkViewSet, basename='parent-student-links')
+router.register(r'bulk-import', BulkImportViewSet, basename='bulk-import')
+router.register(r'attendance-reports', AttendanceReportViewSet, basename='attendance-reports')
+router.register(r'health-records', StudentHealthRecordViewSet, basename='health-records')
+router.register(r'emergency-contacts', StudentEmergencyContactViewSet, basename='emergency-contacts')
+router.register(r'health-metrics', HealthMetricViewSet, basename='health-metrics')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -79,9 +113,12 @@ urlpatterns = [
     path('api/', include(router.urls)),
     # Dashboard endpoints
     path('api/dashboard/parent/', ParentDashboardView.as_view(), name='parent-dashboard'),
+    path('api/dashboard/student/', StudentDashboardView.as_view(), name='student-dashboard'),
+    path('api/dashboard/teacher/', TeacherDashboardView.as_view(), name='teacher-dashboard'),
     path('api/dashboard/schooladmin/', SchoolAdminDashboardView.as_view(), name='schooladmin-dashboard'),
     path('api/dashboard/bursar/', BursarDashboardView.as_view(), name='bursar-dashboard'),
+    path('api/platform/', include('apps.platform.urls')),
     # Feature modules
     path('api/billing/', include('apps.billing.urls')),  # ⭐ Billing Features
     path('api/government/', include('apps.government.urls')),  # ⭐ Government Features
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

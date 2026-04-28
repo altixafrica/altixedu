@@ -5,10 +5,12 @@ URL Configuration for Billing App
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
+    BillingPortfolioView,
+    FlutterwaveCheckoutView,
+    FlutterwaveVerifyView,
+    FlutterwaveWebhookView,
     PricingPageView,
     SubscriptionViewSet,
-    StripeSubscriptionView,
-    StripeWebhookView,
     UpgradeDowngradeView,
     CancelSubscriptionView,
     PaymentHistoryView,
@@ -27,10 +29,12 @@ urlpatterns = [
     
     # Public endpoints
     path('pricing/', PricingPageView.as_view(), name='pricing-page'),
+    path('portfolio/', BillingPortfolioView.as_view(), name='billing-portfolio'),
     
-    # Stripe payment endpoints
-    path('stripe-payment/', StripeSubscriptionView.as_view(), name='stripe-payment'),
-    path('stripe-webhook/', StripeWebhookView.as_view(), name='stripe-webhook'),
+    # Flutterwave checkout endpoints
+    path('checkout/initialize/', FlutterwaveCheckoutView.as_view(), name='checkout-initialize'),
+    path('checkout/verify/', FlutterwaveVerifyView.as_view(), name='checkout-verify'),
+    path('flutterwave/webhook/', FlutterwaveWebhookView.as_view(), name='flutterwave-webhook'),
     
     # Subscription management
     path('upgrade/', UpgradeDowngradeView.as_view(), name='upgrade-downgrade'),

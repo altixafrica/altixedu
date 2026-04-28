@@ -10,9 +10,13 @@ class StudentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'superadmin':
-            return Student.objects.all()
+            return Student.objects.select_related('classroom', 'school').order_by(
+                'school__name', 'last_name', 'first_name'
+            )
         elif user.school:
-            return Student.objects.filter(school=user.school)
+            return Student.objects.filter(school=user.school).select_related(
+                'classroom', 'school'
+            ).order_by('last_name', 'first_name')
         return Student.objects.none()
 
     def perform_create(self, serializer):

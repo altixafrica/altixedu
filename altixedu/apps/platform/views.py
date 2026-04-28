@@ -5,20 +5,136 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.core.exceptions import ValidationError as DjangoValidationError
-from rest_framework.exceptions import ValidationError
+from django.utils import timezone
 
+from apps.accounts.models import User
 from apps.schools.models import School
+from apps.students.models import Student
 from apps.platform.models import Announcement, AIRiskAlert
 from apps.platform.serializers import (
     SchoolBrandingSerializer, SchoolUpdateSerializer,
     AnnouncementSerializer, AIRiskAlertSerializer,
     SubdomainCheckSerializer, SchoolRegistrationSerializer
 )
+from apps.billing.provisioning import seed_school_subscription
 from platform_service import (
     SubdomainValidator, SchoolProvisioner, BrandingService
 )
+
+
+def get_request_school_id(request):
+    """
+    Resolve school context from subdomain middleware first, then the authenticated user.
+
+    The Next.js frontend currently talks to Django through a single API base URL, so
+    subdomain-derived tenant context is not always present. For authenticated school users,
+    falling back to request.user.school_id keeps school-scoped endpoints usable and avoids
+    accidentally treating ordinary users as superadmins.
+    """
+    school_id = getattr(request, 'school_id', None)
+    if school_id:
+        return school_id
+
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        return getattr(user, 'school_id', None)
+
+    return None
+
+
+ROLE_AUDIENCE_MAP = {
+    'admin': 'admin',
+    'teacher': 'teachers',
+    'parent': 'parents',
+    'student': 'students',
+    'bursar': 'all',
+    'superadmin': 'all',
+    'ministry_admin': 'all',
+}
+
+
+class PlatformOverviewAPIView(APIView):
+    """
+    Public platform overview used by the landing page and partner pages.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        active_schools = School.objects.filter(is_active=True)
+        countries = list(
+            active_schools.exclude(country='')
+            .values_list('country', flat=True)
+            .distinct()
+            .order_by('country')
+        )
+        languages = list(
+            active_schools.exclude(language='')
+            .values_list('language', flat=True)
+            .distinct()
+            .order_by('language')
+        )
+        school_types = active_schools.values('school_type').annotate(
+            count=Count('id')
+        ).order_by('-count', 'school_type')
+
+        return Response({
+            'service': 'AltixEdu',
+            'generated_at': timezone.now(),
+            'metrics': {
+                'active_schools': active_schools.count(),
+                'students_managed': Student.objects.filter(
+                    school__is_active=True
+                ).count(),
+                'staff_accounts': User.objects.filter(
+                    school__is_active=True,
+                    role__in=['admin', 'teacher', 'bursar', 'parent']
+                ).count(),
+                'countries': len(countries),
+            },
+            'coverage': {
+                'countries': countries,
+                'languages': languages,
+                'school_types': [
+                    {
+                        'type': item['school_type'],
+                        'count': item['count'],
+                    }
+                    for item in school_types
+                ],
+            },
+            'product_focus': [
+                'Private school operations',
+                'Public school administration',
+                'Ministry and state oversight',
+                'Multi-school finance oversight and reporting',
+            ],
+        }, status=status.HTTP_200_OK)
+
+
+class PlatformHealthAPIView(APIView):
+    """
+    Lightweight health endpoint for probes and uptime checks.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        database_status = 'ok'
+        response_status = status.HTTP_200_OK
+
+        try:
+            School.objects.exists()
+        except Exception:
+            database_status = 'error'
+            response_status = status.HTTP_503_SERVICE_UNAVAILABLE
+
+        return Response({
+            'status': 'ok' if database_status == 'ok' else 'degraded',
+            'database': database_status,
+            'service': 'altixedu-platform',
+            'time': timezone.now(),
+        }, status=response_status)
 
 
 class BrandingPublicAPIView(APIView):
@@ -33,11 +149,12 @@ class BrandingPublicAPIView(APIView):
     
     def get(self, request):
         """Get branding for current school."""
-        if request.school_id:
-            branding = BrandingService.get_branding(request.school_id)
+        school_id = get_request_school_id(request)
+        if school_id:
+            branding = BrandingService.get_branding(school_id)
             if branding:
                 serializer = SchoolBrandingSerializer(
-                    School.objects.get(id=request.school_id),
+                    School.objects.get(id=school_id),
                     context={'request': request}
                 )
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -62,13 +179,14 @@ class BrandingAdminAPIView(APIView):
     
     def get(self, request):
         """Get current school branding."""
-        if not request.school_id:
+        school_id = get_request_school_id(request)
+        if not school_id:
             return Response(
                 {'error': 'Cannot update superadmin branding'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        school = School.objects.get(id=request.school_id)
+        school = School.objects.get(id=school_id)
         serializer = SchoolBrandingSerializer(
             school,
             context={'request': request}
@@ -77,20 +195,29 @@ class BrandingAdminAPIView(APIView):
     
     def put(self, request):
         """Update school branding."""
-        if not request.school_id:
+        return self._update_school_branding(request)
+
+    def patch(self, request):
+        """Partially update school branding."""
+        return self._update_school_branding(request)
+
+    def _update_school_branding(self, request):
+        """Update school branding."""
+        school_id = get_request_school_id(request)
+        if not school_id:
             return Response(
                 {'error': 'Cannot update superadmin branding'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
         # Check if user is admin of this school
-        if request.user.school_id != request.school_id:
+        if request.user.school_id != school_id:
             return Response(
                 {'error': 'Not authorized to update this school'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        school = School.objects.get(id=request.school_id)
+        school = School.objects.get(id=school_id)
         serializer = SchoolUpdateSerializer(
             school,
             data=request.data,
@@ -214,6 +341,7 @@ class SchoolRegistrationAPIView(APIView):
                 region=data.get('region', ''),
                 school_type=data.get('school_type', 'private'),
             )
+            subscription = seed_school_subscription(school)
             
             response_data = {
                 'message': 'School registered successfully!',
@@ -228,6 +356,10 @@ class SchoolRegistrationAPIView(APIView):
                     'email': user.email,
                     'full_name': user.get_full_name(),
                 },
+                'subscription': {
+                    'tier': subscription.tier.display_name if subscription and subscription.tier else None,
+                    'status': subscription.status if subscription else None,
+                } if subscription else None,
                 'next_steps': [
                     'Login at ' + school.full_domain,
                     'Complete school setup wizard',
@@ -265,29 +397,82 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filter announcements by school and target role."""
-        if not self.request.school_id:
-            # Superadmin can see all
+        school_id = get_request_school_id(self.request)
+        user = self.request.user
+
+        if user.role == 'superadmin' and not school_id:
             return Announcement.objects.all()
+
+        if not school_id:
+            return Announcement.objects.none()
         
         # Regular users see announcements for their school
         # and announcements targeting their role or "all"
-        queryset = Announcement.objects.filter(
-            school_id=self.request.school_id
+        queryset = Announcement.objects.select_related('created_by', 'school').filter(
+            school_id=school_id
         )
+
+        if user.role == 'admin':
+            return queryset.order_by('-is_pinned', '-created_at')
         
         # Filter by role if applicable
-        user_role = self.request.user.role
+        user_role = ROLE_AUDIENCE_MAP.get(user.role, user.role)
         queryset = queryset.filter(
             Q(target_role='all') | Q(target_role=user_role)
         )
         
         return queryset.order_by('-is_pinned', '-created_at')
-    
+
+    def create(self, request, *args, **kwargs):
+        if request.user.role not in ['admin', 'superadmin']:
+            return Response(
+                {'error': 'Only school admins can create announcements'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        if not get_request_school_id(request):
+            return Response(
+                {'error': 'School context is required to create announcements'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        announcement = self.get_object()
+        if request.user.role not in ['admin', 'superadmin']:
+            return Response(
+                {'error': 'Only school admins can update announcements'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        if request.user.role != 'superadmin' and request.user.school_id != announcement.school_id:
+            return Response(
+                {'error': 'You can only update announcements in your school'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        announcement = self.get_object()
+        if request.user.role not in ['admin', 'superadmin']:
+            return Response(
+                {'error': 'Only school admins can delete announcements'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        if request.user.role != 'superadmin' and request.user.school_id != announcement.school_id:
+            return Response(
+                {'error': 'You can only delete announcements in your school'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().destroy(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         """Set creator and school."""
+        school_id = get_request_school_id(self.request)
         serializer.save(
             created_by=self.request.user,
-            school_id=self.request.school_id
+            school_id=school_id
         )
 
 
@@ -303,24 +488,29 @@ class AIRiskAlertViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """Filter alerts by school and visibility."""
-        if not self.request.school_id:
-            # Superadmin sees all
+        school_id = get_request_school_id(self.request)
+        user = self.request.user
+
+        if user.role == 'superadmin' and not school_id:
             return AIRiskAlert.objects.all()
+
+        if not school_id:
+            return AIRiskAlert.objects.none()
         
-        queryset = AIRiskAlert.objects.filter(school_id=self.request.school_id)
+        queryset = AIRiskAlert.objects.filter(school_id=school_id)
         
         # Students only see alerts for themselves
-        if self.request.user.role == 'student':
+        if user.role == 'student':
             try:
-                student = self.request.user.student_profile
+                student = user.student_profile
                 queryset = queryset.filter(student=student)
             except:
                 queryset = queryset.none()
         
         # Parents see alerts for their children
-        elif self.request.user.role == 'parent':
+        elif user.role == 'parent':
             try:
-                parent = self.request.user.parent_profile
+                parent = user.parent_profile
                 child_ids = parent.children.values_list('id', flat=True)
                 queryset = queryset.filter(student_id__in=child_ids)
             except:

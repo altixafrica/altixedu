@@ -1,15 +1,44 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django.db import models
 from django.db.models import Q, Avg
 from apps.accounts.permissions import IsRoleOwnerOrAdmin
-from .models import Message, StudentAIInsights, RoleSetting
+from .models import Message, SchoolSetting, StudentAIInsights, RoleSetting
 from .serializers import (
     MessageSerializer,
+    SchoolSettingSerializer,
     StudentAIInsightsSerializer,
     RoleSettingSerializer
 )
+
+
+def get_message_contacts_for_user(user):
+    """
+    Role-aware recipient list for in-app messaging.
+    """
+    if user.role == 'superadmin':
+        return user.__class__.objects.exclude(id=user.id)
+
+    if not user.school_id:
+        return user.__class__.objects.none()
+
+    queryset = user.__class__.objects.filter(school_id=user.school_id).exclude(id=user.id)
+
+    if user.role == 'admin':
+        return queryset.filter(role__in=['teacher', 'bursar', 'parent'])
+
+    if user.role == 'teacher':
+        return queryset.filter(role='admin')
+
+    if user.role == 'parent':
+        return queryset.filter(role__in=['admin', 'teacher'])
+
+    if user.role == 'bursar':
+        return queryset.filter(role='admin')
+
+    return user.__class__.objects.none()
 
 
 class MessageViewSet(viewsets.ModelViewSet):
@@ -26,7 +55,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         Multi-tenancy: only show messages from their school.
         """
         user = self.request.user
-        return Message.objects.filter(
+        return Message.objects.select_related(
+            'sender', 'receiver', 'student'
+        ).filter(
             Q(sender=user) | Q(receiver=user),
             school=user.school
         ).order_by('-sent_at')
@@ -35,6 +66,12 @@ class MessageViewSet(viewsets.ModelViewSet):
         """
         Override to set sender automatically and enforce multi-tenancy.
         """
+        receiver = serializer.validated_data['receiver']
+        allowed_contacts = get_message_contacts_for_user(self.request.user)
+
+        if not allowed_contacts.filter(id=receiver.id).exists():
+            raise PermissionDenied('You cannot message this recipient.')
+
         serializer.save(sender=self.request.user, school=self.request.user.school)
 
     @action(detail=False, methods=['get'])
@@ -42,10 +79,12 @@ class MessageViewSet(viewsets.ModelViewSet):
         """
         Get all received messages (unread first).
         """
-        messages = Message.objects.filter(
+        messages = Message.objects.select_related(
+            'sender', 'receiver', 'student'
+        ).filter(
             receiver=request.user,
             school=request.user.school
-        ).order_by('-read', '-sent_at')
+        ).order_by('read', '-sent_at')
         
         serializer = self.get_serializer(messages, many=True)
         return Response(serializer.data)
@@ -55,7 +94,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         """
         Get all sent messages.
         """
-        messages = Message.objects.filter(
+        messages = Message.objects.select_related(
+            'sender', 'receiver', 'student'
+        ).filter(
             sender=request.user,
             school=request.user.school
         ).order_by('-sent_at')
@@ -114,6 +155,23 @@ class MessageViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
+    @action(detail=False, methods=['get'])
+    def contacts(self, request):
+        """
+        Return role-aware message contacts for the authenticated user.
+        """
+        contacts = get_message_contacts_for_user(request.user).order_by('role', 'first_name', 'last_name')
+
+        return Response([
+            {
+                'id': contact.id,
+                'full_name': contact.get_full_name(),
+                'email': contact.email,
+                'role': contact.role,
+            }
+            for contact in contacts
+        ])
+
 
 class StudentAIInsightsViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -147,8 +205,11 @@ class StudentAIInsightsViewSet(viewsets.ReadOnlyModelViewSet):
         if user.role == 'teacher':
             # Teacher sees only their students' insights
             from apps.academics.models import TeacherSubject
+            teacher_profile = getattr(user, 'teacher_profile', None)
+            if not teacher_profile:
+                return StudentAIInsights.objects.none()
             classrooms = TeacherSubject.objects.filter(
-                teacher=user
+                teacher=teacher_profile
             ).values_list('classroom', flat=True).distinct()
             
             return StudentAIInsights.objects.filter(
@@ -331,4 +392,50 @@ class RoleSettingViewSet(viewsets.ModelViewSet):
         )
         
         serializer = self.get_serializer(settings, many=True)
+        return Response(serializer.data)
+
+
+class SchoolSettingViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing school-wide settings.
+    """
+    serializer_class = SchoolSettingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if user.role == 'superadmin':
+            return SchoolSetting.objects.all().select_related('school')
+
+        if user.school_id:
+            return SchoolSetting.objects.filter(school=user.school).select_related('school')
+
+        return SchoolSetting.objects.none()
+
+    @action(detail=False, methods=['get', 'put', 'patch'])
+    def current(self, request):
+        user = request.user
+        if user.role not in ['admin', 'superadmin'] or not user.school_id:
+            return Response(
+                {'error': 'Only school admins can manage school settings in a school context'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        school_setting, _ = SchoolSetting.objects.get_or_create(
+            school=user.school,
+            defaults={'notification_email': user.email},
+        )
+
+        if request.method == 'GET':
+            serializer = self.get_serializer(school_setting)
+            return Response(serializer.data)
+
+        serializer = self.get_serializer(
+            school_setting,
+            data=request.data,
+            partial=request.method == 'PATCH'
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response(serializer.data)

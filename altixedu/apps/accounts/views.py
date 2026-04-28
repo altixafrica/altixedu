@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
-from django.db.models import Sum, Q, Count, F
+from django.db.models import Sum, Q, Count, F, Prefetch
 from .models import User
 from .serializers import UserSerializer, CreateUserSerializer, CreateMinistryAdminSerializer, PasswordResetSerializer, MinistryAdminLoginSerializer
 from .permissions import IsParent, IsSchoolAdmin
@@ -12,7 +12,9 @@ from apps.students.models import Student
 from apps.finance.models import StudentFee
 from apps.notifications.models import StudentAIInsights, RoleSetting, Message
 from apps.attendance.models import Attendance
-from apps.schools.models import School
+from apps.schools.models import School, Ministry
+from apps.billing.provisioning import seed_school_subscription
+from .dashboard_payloads import build_bursar_dashboard_payload, build_parent_dashboard_payload, build_student_dashboard_payload
 
 
 class LoginView(APIView):
@@ -42,12 +44,9 @@ class LoginView(APIView):
         if username:
             user = authenticate(username=username, password=password)
         elif email:
-            try:
-                user_obj = User.objects.get(email=email)
-                if user_obj.check_password(password):
-                    user = user_obj
-            except User.DoesNotExist:
-                pass
+            user_obj = User.objects.filter(email=email).select_related('school', 'ministry').first()
+            if user_obj and user_obj.check_password(password):
+                user = user_obj
         
         if not user:
             return Response(
@@ -72,8 +71,19 @@ class LoginView(APIView):
             'role': user.role,
             'school': {
                 'id': user.school.id,
-                'name': user.school.name
+                'name': user.school.name,
+                'subdomain': user.school.subdomain,
+                'full_domain': user.school.full_domain,
+                'country': user.school.country,
+                'school_type': user.school.school_type,
             } if user.school else None,
+            'ministry': {
+                'id': user.ministry.id,
+                'name': user.ministry.name,
+                'country': user.ministry.country,
+                'state_or_province': user.ministry.state_or_province,
+                'currency_code': user.ministry.currency_code,
+            } if user.ministry else None,
             'permissions': self._get_role_permissions(user)
         }
         
@@ -143,7 +153,7 @@ class LoginView(APIView):
                 'view_children_fees': True,
                 'view_children_ai_insights': True,
                 'send_messages': True,
-                'pay_fees': True,
+                'view_fee_status': True,
             },
             'bursar': {
                 'view_all_students': True,
@@ -202,8 +212,19 @@ class CurrentUserView(APIView):
             'role': user.role,
             'school': {
                 'id': user.school.id,
-                'name': user.school.name
+                'name': user.school.name,
+                'subdomain': user.school.subdomain,
+                'full_domain': user.school.full_domain,
+                'country': user.school.country,
+                'school_type': user.school.school_type,
             } if user.school else None,
+            'ministry': {
+                'id': user.ministry.id,
+                'name': user.ministry.name,
+                'country': user.ministry.country,
+                'state_or_province': user.ministry.state_or_province,
+                'currency_code': user.ministry.currency_code,
+            } if user.ministry else None,
             'permissions': LoginView._get_role_permissions(user)
         })
 
@@ -221,11 +242,19 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter users by school for non-superadmins."""
         user = self.request.user
+        role_filter = self.request.query_params.get('role')
+
         if user.role == 'superadmin':
-            return User.objects.all()
+            queryset = User.objects.select_related('school', 'ministry').all()
         elif user.school and user.role in ['admin']:
-            return User.objects.filter(school=user.school)
-        return User.objects.none()
+            queryset = User.objects.select_related('school', 'ministry').filter(school=user.school)
+        else:
+            return User.objects.none()
+
+        if role_filter:
+            queryset = queryset.filter(role=role_filter)
+
+        return queryset.order_by('last_name', 'first_name', 'username')
     
     def create(self, request, *args, **kwargs):
         """
@@ -244,6 +273,7 @@ class UserViewSet(viewsets.ModelViewSet):
         data = request.data.copy()
         if request.user.role != 'superadmin':
             data['school'] = request.user.school.id
+            data.pop('ministry', None)
         
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -280,6 +310,9 @@ class UserViewSet(viewsets.ModelViewSet):
         self.perform_update(serializer)
         
         return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
     
     def destroy(self, request, *args, **kwargs):
         """Delete user - only superadmin can delete users."""
@@ -334,58 +367,197 @@ class BursarDashboardView(APIView):
                 'schools_summary': schools_data
             })
         
-        # For bursar/admin: show their school's financial data
-        school = user.school
-        student_fees = StudentFee.objects.filter(school=school).select_related('student', 'fee')
-        
-        # Calculate metrics
-        total_due = student_fees.aggregate(Sum('fee__amount'))['fee__amount__sum'] or 0
-        total_paid = student_fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-        total_balance = total_due - total_paid
-        
-        # Group by payment status
-        fees_by_status = [
-            {
-                'status': 'paid',
-                'count': student_fees.filter(amount_paid__gte=F('fee__amount')).count(),
-                'total': student_fees.filter(amount_paid__gte=F('fee__amount')).aggregate(
-                    total=Sum('amount_paid')
-                )['total'] or 0
+        return Response(build_bursar_dashboard_payload(user))
+
+
+class TeacherDashboardView(APIView):
+    """
+    Teacher dashboard showing classroom assignments, watchlist students, and work queue.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role != 'teacher':
+            return Response(
+                {'error': 'Teacher access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if not user.school:
+            return Response(
+                {'error': 'Teacher must be linked to a school'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        teacher_profile = getattr(user, 'teacher_profile', None)
+        if not teacher_profile:
+            return Response(
+                {'error': 'Teacher profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.academics.models import TeacherSubject, Classroom
+        from apps.attendance.models import Attendance
+        from apps.academics.models import ExamResult
+
+        assignments = TeacherSubject.objects.filter(
+            teacher=teacher_profile,
+            classroom__school=user.school
+        ).select_related('subject', 'classroom').order_by('classroom__name', 'subject__name')
+
+        classroom_ids = list(assignments.values_list('classroom_id', flat=True).distinct())
+        subject_ids = list(assignments.values_list('subject_id', flat=True).distinct())
+
+        classrooms = (
+            Classroom.objects.filter(id__in=classroom_ids)
+            .select_related('class_teacher', 'academic_year')
+            .order_by('name')
+        )
+        students = Student.objects.filter(
+            school=user.school,
+            classroom_id__in=classroom_ids
+        ).select_related('classroom').order_by('classroom__name', 'last_name', 'first_name')
+
+        ai_insights = StudentAIInsights.objects.filter(student__in=students)
+        ai_map = {insight.student_id: insight for insight in ai_insights}
+
+        attendance_window = timezone.now().date() - timedelta(days=30)
+        attendance_rows = Attendance.objects.filter(
+            student__in=students,
+            date__gte=attendance_window
+        ).values('student_id').annotate(
+            total_days=Count('id'),
+            present_days=Count('id', filter=Q(status='present')),
+            absent_days=Count('id', filter=Q(status='absent')),
+            late_days=Count('id', filter=Q(status='late')),
+        )
+        attendance_map = {row['student_id']: row for row in attendance_rows}
+
+        classroom_subjects = {}
+        for assignment in assignments:
+            classroom_subjects.setdefault(assignment.classroom_id, []).append({
+                'id': assignment.subject.id,
+                'name': assignment.subject.name,
+                'code': assignment.subject.code,
+            })
+
+        recent_messages = Message.objects.filter(
+            Q(sender=user) | Q(receiver=user),
+            school=user.school
+        ).select_related('sender', 'receiver', 'student').order_by('-sent_at')[:8]
+
+        settings = RoleSetting.objects.filter(role='teacher', school=user.school)
+
+        student_rows = []
+        for student in students[:40]:
+            insight = ai_map.get(student.id)
+            attendance = attendance_map.get(student.id, {})
+            total_days = attendance.get('total_days', 0) or 0
+            present_days = attendance.get('present_days', 0) or 0
+            attendance_percentage = (
+                round((present_days / total_days) * 100, 1)
+                if total_days > 0 else round(float(getattr(insight, 'attendance_percentage', 0) or 0), 1)
+            )
+
+            student_rows.append({
+                'id': student.id,
+                'first_name': student.first_name,
+                'last_name': student.last_name,
+                'admission_number': student.admission_number,
+                'classroom': student.classroom.name if student.classroom else None,
+                'attendance_percentage': attendance_percentage,
+                'average_grade': round(float(getattr(insight, 'average_grade', 0) or 0), 1),
+                'overall_risk': round(float(getattr(insight, 'overall_risk', 0) or 0), 2),
+                'risk_level': insight.get_risk_level() if insight else 'UNKNOWN',
+                'flagged_subjects': getattr(insight, 'flagged_subjects', []),
+            })
+
+        response_data = {
+            'user': {
+                'id': user.id,
+                'name': user.get_full_name(),
+                'email': user.email,
+                'role': user.role,
+                'school': user.school.name,
             },
-            {
-                'status': 'partial',
-                'count': student_fees.filter(
-                    amount_paid__gt=0,
-                    amount_paid__lt=F('fee__amount')
+            'summary': {
+                'classrooms_count': len(classroom_ids),
+                'subjects_count': len(subject_ids),
+                'students_count': students.count(),
+                'unread_messages': Message.objects.filter(
+                    receiver=user,
+                    read=False,
+                    school=user.school
                 ).count(),
-                'total': student_fees.filter(
-                    amount_paid__gt=0,
-                    amount_paid__lt=F('fee__amount')
-                ).aggregate(total=Sum('amount_paid'))['total'] or 0
+                'at_risk_students': ai_insights.filter(overall_risk__gte=0.5).count(),
+                'attendance_entries_last_30_days': Attendance.objects.filter(
+                    recorded_by=user,
+                    date__gte=attendance_window
+                ).count(),
+                'results_entered': ExamResult.objects.filter(created_by=user).count(),
             },
-            {
-                'status': 'unpaid',
-                'count': student_fees.filter(amount_paid=0).count(),
-                'total': student_fees.filter(amount_paid=0).aggregate(
-                    total=Sum('fee__amount')
-                )['total'] or 0
-            }
-        ]
-        
-        return Response({
-            'school': {
-                'id': school.id,
-                'name': school.name
-            },
-            'financial_summary': {
-                'total_due': float(total_due),
-                'total_paid': float(total_paid),
-                'balance': float(total_balance),
-                'collection_rate': (total_paid / total_due * 100) if total_due > 0 else 0
-            },
-            'fees_by_status': fees_by_status,
-            'total_students': Student.objects.filter(school=school).count(),
-        })
+            'classrooms': [
+                {
+                    'id': classroom.id,
+                    'name': classroom.name,
+                    'grade_level': classroom.grade_level,
+                    'academic_year': classroom.academic_year.year if classroom.academic_year else None,
+                    'student_count': classroom.students.count(),
+                    'is_class_teacher': classroom.class_teacher_id == teacher_profile.id,
+                    'subjects': classroom_subjects.get(classroom.id, []),
+                }
+                for classroom in classrooms
+            ],
+            'subject_assignments': [
+                {
+                    'subject_id': assignment.subject.id,
+                    'subject_name': assignment.subject.name,
+                    'subject_code': assignment.subject.code,
+                    'classroom_id': assignment.classroom.id,
+                    'classroom_name': assignment.classroom.name,
+                    'grade_level': assignment.classroom.grade_level,
+                }
+                for assignment in assignments
+            ],
+            'students': student_rows,
+            'ai_watchlist': [
+                {
+                    'student_id': insight.student.id,
+                    'student_name': f"{insight.student.first_name} {insight.student.last_name}",
+                    'classroom': insight.student.classroom.name if insight.student.classroom else None,
+                    'attendance_risk': insight.attendance_risk,
+                    'performance_risk': insight.performance_risk,
+                    'overall_risk': insight.overall_risk,
+                    'risk_level': insight.get_risk_level(),
+                    'flagged_subjects': insight.flagged_subjects,
+                }
+                for insight in ai_insights.filter(overall_risk__gte=0.5).select_related('student')[:12]
+            ],
+            'recent_messages': [
+                {
+                    'id': message.id,
+                    'direction': 'inbound' if message.receiver_id == user.id else 'outbound',
+                    'counterpart_name': (
+                        message.sender.get_full_name()
+                        if message.receiver_id == user.id else message.receiver.get_full_name()
+                    ),
+                    'content': message.content,
+                    'student_name': (
+                        f"{message.student.first_name} {message.student.last_name}"
+                        if message.student else None
+                    ),
+                    'read': message.read,
+                    'sent_at': message.sent_at,
+                }
+                for message in recent_messages
+            ],
+            'settings': {setting.key: setting.value for setting in settings},
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class ParentDashboardView(APIView):
@@ -396,107 +568,31 @@ class ParentDashboardView(APIView):
 
     def get(self, request):
         user = request.user
-        
-        # 1. Fetch all children linked to this parent
-        students = Student.objects.filter(parents=user).select_related('classroom', 'school')
-        
-        # 2. Fetch fees per student with aggregations
-        fees_data = []
-        for student in students:
-            student_fees = StudentFee.objects.filter(student=student)
-            total_due = sum(fee.fee.amount for fee in student_fees)
-            total_paid = sum(fee.amount_paid for fee in student_fees)
-            balance = total_due - total_paid
-            fees_data.append({
-                'student_id': student.id,
-                'student_name': f"{student.first_name} {student.last_name}",
-                'total_due': total_due,
-                'amount_paid': total_paid,
-                'balance': balance,
-                'paid': balance <= 0
-            })
-        
-        # 3. Fetch attendance for all children (recent 30 days)
-        from django.utils import timezone
-        from datetime import timedelta
-        from django.db.models import F
-        import models
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        
-        attendance_data = []
-        for student in students:
-            attendance_records = Attendance.objects.filter(
-                student=student,
-                created_at__gte=thirty_days_ago
-            ).order_by('-date')
-            attendance_data.append({
-                'student_id': student.id,
-                'student_name': f"{student.first_name} {student.last_name}",
-                'total_days': attendance_records.count(),
-                'present_days': attendance_records.filter(status='present').count(),
-                'absent_days': attendance_records.filter(status='absent').count(),
-                'late_days': attendance_records.filter(status='late').count(),
-                'attendance_percentage': (
-                    (attendance_records.filter(status='present').count() / 
-                     attendance_records.count() * 100) if attendance_records.count() > 0 else 0
-                )
-            })
-        
-        # 4. Fetch AI insights per student
-        ai_insights_data = []
-        for student in students:
-            ai_insight = StudentAIInsights.objects.filter(student=student).first()
-            if ai_insight:
-                ai_insights_data.append({
-                    'student_id': student.id,
-                    'student_name': f"{student.first_name} {student.last_name}",
-                    'attendance_risk': ai_insight.attendance_risk,
-                    'performance_risk': ai_insight.performance_risk,
-                    'low_attendance': ai_insight.low_attendance,
-                    'low_performance': ai_insight.low_performance,
-                    'flagged_subjects': ai_insight.flagged_subjects
-                })
-        
-        # 5. Fetch parent settings
-        settings = RoleSetting.objects.filter(role='parent', school=user.school)
-        settings_data = {s.key: s.value for s in settings}
-        
-        # 6. Fetch unread message count
-        unread_messages = Message.objects.filter(
-            receiver=user,
-            read=False,
-            school=user.school
-        ).count()
-        
-        # 7. Build response
-        response_data = {
-            'user': {
-                'id': user.id,
-                'name': user.get_full_name(),
-                'email': user.email,
-                'role': user.role,
-                'school': user.school.name if user.school else None
-            },
-            'children': [
-                {
-                    'id': s.id,
-                    'first_name': s.first_name,
-                    'last_name': s.last_name,
-                    'admission_number': s.admission_number,
-                    'classroom': s.classroom.name if s.classroom else None,
-                    'status': s.status,
-                    'gender': s.gender
-                } for s in students
-            ],
-            'fees': fees_data,
-            'attendance': attendance_data,
-            'ai_insights': ai_insights_data,
-            'messages': {
-                'unread_count': unread_messages
-            },
-            'settings': settings_data
-        }
-        return Response(response_data, status=status.HTTP_200_OK)
+
+        return Response(build_parent_dashboard_payload(user), status=status.HTTP_200_OK)
+
+
+class StudentDashboardView(APIView):
+    """
+    Student dashboard showing the student's own academics, attendance, alerts, and settings.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role != 'student':
+            return Response(
+                {'error': 'Student access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        payload = build_student_dashboard_payload(user)
+        if not payload:
+            return Response(
+                {'error': 'Student profile not found for this user'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class CreateMinistryAdminView(APIView):
@@ -546,10 +642,15 @@ class PasswordResetView(APIView):
         
         # Validate permissions
         if is_admin_reset:
-            # Only superadmin can force password reset
-            if request.user.role != 'superadmin':
+            # Superadmin can force reset globally; school admins can reset users in their school.
+            if request.user.role not in ['superadmin', 'admin']:
                 return Response(
-                    {'error': 'Only superadmin can force password resets'},
+                    {'error': 'Only admins can force password resets'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            if request.user.role == 'admin' and user.school_id != request.user.school_id:
+                return Response(
+                    {'error': 'School admins can only reset passwords for users in their school'},
                     status=status.HTTP_403_FORBIDDEN
                 )
         else:
@@ -595,15 +696,33 @@ class SchoolSetupView(APIView):
         """Create a new school with state collection."""
         # Check role-based permissions
         user = request.user
+        allowed_school_types = [choice[0] for choice in School.SCHOOL_TYPE_CHOICES]
+        requested_school_type = request.data.get('school_type', 'private')
+        selected_ministry = None
+
         if user.role == 'superadmin':
             # Superadmin can create schools anywhere
-            pass
+            ministry_id = request.data.get('ministry_id')
+            if ministry_id:
+                try:
+                    selected_ministry = Ministry.objects.get(id=ministry_id)
+                except Ministry.DoesNotExist:
+                    return Response(
+                        {'error': 'Selected ministry does not exist'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
         elif user.role == 'ministry_admin':
             # Ministry admin can create schools in their state only
-            request_state = request.data.get('state')
-            if request_state != user.ministry.state_or_province:
+            selected_ministry = user.ministry
+            if not selected_ministry:
                 return Response(
-                    {'error': f'Ministry admin can only create schools in {user.ministry.state_or_province}'},
+                    {'error': 'Ministry admin must be linked to a ministry'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            request_state = request.data.get('state')
+            if request_state != selected_ministry.state_or_province:
+                return Response(
+                    {'error': f'Ministry admin can only create schools in {selected_ministry.state_or_province}'},
                     status=status.HTTP_403_FORBIDDEN
                 )
         elif user.role == 'admin':
@@ -614,9 +733,46 @@ class SchoolSetupView(APIView):
             )
         else:
             return Response(
-                {'error': 'Only superadmin, ministry admin, or school admin can create schools'},
+                {'error': 'Only superadmin or ministry admin can create schools'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        if requested_school_type not in allowed_school_types:
+            return Response(
+                {
+                    'error': (
+                        f'Invalid school_type "{requested_school_type}". '
+                        f'Allowed values: {allowed_school_types}'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if selected_ministry:
+            request_state = request.data.get('state')
+            request_country = request.data.get('country')
+
+            if request_state and request_state != selected_ministry.state_or_province:
+                return Response(
+                    {
+                        'error': (
+                            f'School state must match the ministry state '
+                            f'({selected_ministry.state_or_province})'
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if request_country and request_country != selected_ministry.country:
+                return Response(
+                    {
+                        'error': (
+                            f'School country must match the ministry country '
+                            f'({selected_ministry.country})'
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # Validate required fields
         required_fields = ['name', 'subdomain', 'email', 'phone', 'address', 'city', 'state', 'country']
@@ -656,13 +812,19 @@ class SchoolSetupView(APIView):
                 website=request.data.get('website', ''),
                 timezone=request.data.get('timezone', 'UTC'),
                 language=request.data.get('language', 'en'),
+                region=request.data.get('region', ''),
+                school_type=requested_school_type,
+                ministry=selected_ministry,
             )
+
+            subscription = seed_school_subscription(school)
             
             return Response(
                 {
                     'id': school.id,
                     'name': school.name,
                     'subdomain': school.subdomain,
+                    'full_domain': school.full_domain,
                     'email': school.email,
                     'phone': school.phone,
                     'address': school.address,
@@ -672,6 +834,22 @@ class SchoolSetupView(APIView):
                     'website': school.website,
                     'timezone': school.timezone,
                     'language': school.language,
+                    'region': school.region,
+                    'school_type': school.school_type,
+                    'ministry': {
+                        'id': selected_ministry.id,
+                        'name': selected_ministry.name,
+                        'country': selected_ministry.country,
+                        'state_or_province': selected_ministry.state_or_province,
+                    } if selected_ministry else None,
+                    'subscription': {
+                        'id': subscription.id,
+                        'tier': subscription.tier.display_name if subscription and subscription.tier else None,
+                        'status': subscription.status if subscription else None,
+                        'payment_frequency': subscription.payment_frequency if subscription else None,
+                    } if subscription else None,
+                    'created_by_role': user.role,
+                    'allowed_school_types': allowed_school_types,
                     'message': f'School "{school.name}" created successfully with state "{school.state}"'
                 },
                 status=status.HTTP_201_CREATED

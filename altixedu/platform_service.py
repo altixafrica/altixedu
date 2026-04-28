@@ -146,6 +146,20 @@ class SubdomainValidator:
 
 class SchoolProvisioner:
     """Provision new schools with default settings."""
+
+    @staticmethod
+    def _generate_username(email):
+        base_username = re.sub(r'[^a-z0-9._-]', '', email.split('@')[0].lower())
+        base_username = base_username or 'schooladmin'
+        candidate = base_username[:150]
+        counter = 1
+
+        while User.objects.filter(username=candidate).exists():
+            suffix = f'-{counter}'
+            candidate = f"{base_username[:150 - len(suffix)]}{suffix}"
+            counter += 1
+
+        return candidate
     
     @transaction.atomic
     def create_school(self, name, subdomain, email, admin_email, admin_password,
@@ -174,26 +188,46 @@ class SchoolProvisioner:
         except ValidationError as e:
             raise ValueError(f"Invalid subdomain: {e.message}") from e
         
+        admin_first_name = kwargs.pop('admin_first_name', 'Admin')
+        admin_last_name = kwargs.pop('admin_last_name', 'User')
+        school_fields = {
+            key: value
+            for key, value in kwargs.items()
+            if key in {
+                'address',
+                'postal_code',
+                'website',
+                'primary_color',
+                'secondary_color',
+                'timezone',
+                'language',
+                'school_type',
+                'region',
+                'established_year',
+            }
+        }
+
         # Create school
         school = School.objects.create(
             name=name,
             subdomain=subdomain,
             email=email,
             phone=phone,
-            address='',  # Will be updated later
+            address=school_fields.pop('address', ''),  # Can be completed during onboarding
             city=city,
             state=state,
             country=country,
             is_active=True,
-            **kwargs
+            **school_fields
         )
         
         # Create admin user
         user = User.objects.create_user(
+            username=self._generate_username(admin_email),
             email=admin_email,
             password=admin_password,
-            first_name=kwargs.get('admin_first_name', 'Admin'),
-            last_name=kwargs.get('admin_last_name', 'User'),
+            first_name=admin_first_name,
+            last_name=admin_last_name,
             role='admin',
             school=school,
             is_active=True

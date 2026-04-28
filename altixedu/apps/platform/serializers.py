@@ -10,13 +10,14 @@ class SchoolBrandingSerializer(serializers.ModelSerializer):
     """Serializer for school branding information (public-facing)."""
     full_domain = serializers.SerializerMethodField()
     logo = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
     
     class Meta:
         model = School
         fields = [
             'id', 'name', 'subdomain', 'full_domain', 'logo',
-            'primary_color', 'secondary_color', 'language',
-            'timezone', 'website'
+            'logo_url', 'email', 'primary_color', 'secondary_color',
+            'language', 'timezone', 'website'
         ]
         read_only_fields = fields
     
@@ -31,6 +32,9 @@ class SchoolBrandingSerializer(serializers.ModelSerializer):
             return obj.logo.url
         return None
 
+    def get_logo_url(self, obj):
+        return self.get_logo(obj)
+
 
 class SchoolUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating school branding (admin-only)."""
@@ -38,8 +42,9 @@ class SchoolUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = School
         fields = [
-            'primary_color', 'secondary_color', 'logo',
-            'language', 'timezone', 'website'
+            'name', 'email', 'primary_color',
+            'secondary_color', 'logo', 'language',
+            'timezone', 'website'
         ]
 
 
@@ -57,7 +62,13 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             'created_by', 'created_by_name', 'is_pinned',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'created_by_name']
+        read_only_fields = [
+            'school',
+            'created_by',
+            'created_at',
+            'updated_at',
+            'created_by_name',
+        ]
 
 
 class AIRiskAlertSerializer(serializers.ModelSerializer):

@@ -55,6 +55,22 @@ See: **QUICK_START.md** → Setup Section
 - Audit logging: **FEATURES_IMPLEMENTATION_GUIDE.md** → Section 3
 - Multi-language: **FEATURES_IMPLEMENTATION_GUIDE.md** → Section 4
 
+### Default SaaS Pricing
+- Starter Plan: `NGN 9,900/month`, `NGN 28,215/quarter`, `NGN 99,000/year`
+- Professional Plan: `NGN 19,900/month`, `NGN 56,715/quarter`, `NGN 199,000/year`
+- Enterprise Plan: `NGN 39,900/month`, `NGN 113,715/quarter`, `NGN 399,000/year`
+- Government Bulk Plan: starts from `NGN 9,900/month` per school before ministry volume discounts
+- Government bulk discounts: `50+ schools = 20% off`, `101+ = 30% off`, `500+ = 40% off`
+- Quarterly amounts are calculated as `monthly x 3 x 0.95`
+- Annual amounts use the seeded annual tier prices
+
+Seed the catalog with:
+```bash
+cd altixedu-backend/altixedu
+python manage.py migrate
+python manage.py seed_billing_catalog
+```
+
 ### Dependencies
 ```bash
 pip install cryptography reportlab django-cors-headers

@@ -51,6 +51,9 @@ def log_action(
             ip_address = getattr(request, 'client_ip', ip_address) or _get_client_ip(request)
             user_agent = getattr(request, 'user_agent', user_agent) or request.META.get('HTTP_USER_AGENT', '')
             request_id = getattr(request, 'request_id', request_id)
+
+        user_agent = user_agent or ''
+        request_id = request_id or ''
         
         # Create audit log entry
         audit_log = AuditLog(

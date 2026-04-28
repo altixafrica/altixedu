@@ -88,9 +88,9 @@ class Subscription(models.Model):
     renewal_date = models.DateTimeField()  # Next billing date
     cancelled_at = models.DateTimeField(null=True, blank=True)
     
-    # Stripe info
-    stripe_customer_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
-    stripe_subscription_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    # Flutterwave info
+    flutterwave_customer_id = models.CharField(max_length=255, null=True, blank=True)
+    flutterwave_plan_id = models.CharField(max_length=255, null=True, blank=True)
     
     # Special pricing
     discount_percentage = models.IntegerField(default=0)  # For govt/bulk
@@ -143,9 +143,8 @@ class PaymentTransaction(models.Model):
     
     # Payment method
     PAYMENT_METHODS = [
-        ('card', 'Credit/Debit Card (Stripe)'),
-        ('bank_transfer', 'Bank Transfer'),
         ('flutterwave', 'Flutterwave'),
+        ('bank_transfer', 'Bank Transfer'),
         ('manual', 'Manual (Invoice)'),
     ]
     payment_method = models.CharField(max_length=50, choices=PAYMENT_METHODS)
@@ -155,8 +154,7 @@ class PaymentTransaction(models.Model):
     
     # Transaction IDs
     transaction_id = models.CharField(max_length=255, unique=True)  # Unique per transaction
-    stripe_charge_id = models.CharField(max_length=255, null=True, blank=True)
-    stripe_invoice_id = models.CharField(max_length=255, null=True, blank=True)
+    flutterwave_transaction_id = models.CharField(max_length=255, null=True, blank=True)
     
     # Dates
     created_at = models.DateTimeField(auto_now_add=True)

@@ -10,9 +10,13 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'superadmin':
-            return Attendance.objects.all()
+            return Attendance.objects.select_related('student', 'recorded_by', 'school').order_by(
+                '-date', 'student__last_name', 'student__first_name'
+            )
         elif user.school:
-            return Attendance.objects.filter(school=user.school)
+            return Attendance.objects.filter(school=user.school).select_related(
+                'student', 'recorded_by', 'school'
+            ).order_by('-date', 'student__last_name', 'student__first_name')
         return Attendance.objects.none()
 
     def perform_create(self, serializer):

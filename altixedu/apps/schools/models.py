@@ -113,6 +113,14 @@ class School(models.Model):
         blank=True,
         help_text="Geographic region for default templates"
     )
+    ministry = models.ForeignKey(
+        Ministry,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='schools',
+        help_text="Ministry that provisioned or governs this school"
+    )
     established_year = models.IntegerField(null=True, blank=True)
     is_active = models.BooleanField(
         default=True,

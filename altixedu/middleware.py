@@ -10,6 +10,7 @@ from django.core.cache import cache
 from django.http import JsonResponse
 from django.conf import settings
 from rest_framework.status import HTTP_429_TOO_MANY_REQUESTS
+import ipaddress
 
 
 class RateLimitingMiddleware:
@@ -28,6 +29,9 @@ class RateLimitingMiddleware:
         self.API_REQUESTS_WINDOW = getattr(settings, 'API_REQUESTS_WINDOW', 3600)  # 1 hour
         
     def __call__(self, request):
+        if self._is_local_development_request(request):
+            return self.get_response(request)
+
         # Get client identifier (user_id or IP)
         client_identifier = self._get_client_identifier(request)
         
@@ -49,6 +53,22 @@ class RateLimitingMiddleware:
         
         response = self.get_response(request)
         return response
+
+    def _is_local_development_request(self, request):
+        """Skip rate limiting for loopback traffic during local development/testing."""
+        if not getattr(settings, 'DEBUG', False):
+            return False
+
+        host = request.get_host().split(':', 1)[0]
+        ip = self._get_client_ip(request)
+        for value in (host, ip):
+            try:
+                if ipaddress.ip_address(value).is_loopback:
+                    return True
+            except ValueError:
+                if value in {'localhost', '[::1]'}:
+                    return True
+        return False
     
     def _get_client_identifier(self, request):
         """Get a unique identifier for the client"""

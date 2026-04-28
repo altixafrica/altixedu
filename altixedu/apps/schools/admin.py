@@ -4,9 +4,9 @@ from .models import School, Ministry
 
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
-    list_display = ('name', 'subdomain', 'full_domain', 'email', 'is_active', 'school_type', 'created_at')
-    list_filter = ('is_active', 'school_type', 'region', 'created_at')
-    search_fields = ('name', 'email', 'subdomain')
+    list_display = ('name', 'subdomain', 'full_domain', 'email', 'ministry', 'is_active', 'school_type', 'created_at')
+    list_filter = ('is_active', 'school_type', 'region', 'country', 'ministry', 'created_at')
+    search_fields = ('name', 'email', 'subdomain', 'ministry__name')
     readonly_fields = ('created_at', 'updated_at', 'full_domain')
     
     fieldsets = (
@@ -16,7 +16,7 @@ class SchoolAdmin(admin.ModelAdmin):
             'description': 'Configure subdomain (e.g., "muse" for muse.altixedu.com) and manage school access'
         }),
         ('Address', {'fields': ('address', 'city', 'postal_code', 'state', 'country')}),
-        ('Organization', {'fields': ('school_type', 'region', 'established_year', 'website')}),
+        ('Organization', {'fields': ('school_type', 'region', 'ministry', 'established_year', 'website')}),
         ('Branding', {'fields': ('logo', 'primary_color', 'secondary_color')}),
         ('Settings', {'fields': ('timezone', 'language')}),
         ('Timestamps', {'fields': ('created_at', 'updated_at')}),

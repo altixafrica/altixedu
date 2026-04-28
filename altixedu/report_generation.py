@@ -103,7 +103,7 @@ class AttendanceReportGenerator:
                 record.student.admission_number,
                 str(record.student.classroom) if record.student.classroom else 'N/A',
                 record.status.upper(),
-                record.remarks or ''
+                getattr(record, 'remarks', '') or ''
             ])
         
         return output.getvalue()
@@ -235,7 +235,7 @@ class AttendanceReportGenerator:
                 record.student.admission_number,
                 str(record.student.classroom) if record.student.classroom else 'N/A',
                 record.status.upper(),
-                record.remarks or ''
+                getattr(record, 'remarks', '') or ''
             ])
         
         # Create table

@@ -25,7 +25,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
 class PaymentTransactionAdmin(admin.ModelAdmin):
     list_display = ['id', 'subscription', 'amount', 'status', 'created_at']
     list_filter = ['status', 'created_at']
-    search_fields = ['subscription__school__name', 'stripe_transaction_id']
+    search_fields = ['subscription__school__name', 'transaction_id']
     readonly_fields = ['created_at']
 
 

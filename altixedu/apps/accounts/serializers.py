@@ -12,14 +12,17 @@ class UserSerializer(serializers.ModelSerializer):
             'first_name',
             'last_name',
             'role',
-            'school'
+            'school',
+            'ministry',
+            'phone',
+            'is_active',
         ]
-        read_only_fields = ['school']  # School auto-set by admin
+        read_only_fields = []
 
 
 class CreateUserSerializer(serializers.ModelSerializer):
     """Serializer for creating/updating users with password."""
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(write_only=True, min_length=8, required=False)
     
     class Meta:
         model = User
@@ -30,7 +33,11 @@ class CreateUserSerializer(serializers.ModelSerializer):
             'password',
             'first_name',
             'last_name',
-            'role'
+            'role',
+            'phone',
+            'is_active',
+            'school',
+            'ministry',
         ]
         extra_kwargs = {
             'password': {'write_only': True}
@@ -38,9 +45,12 @@ class CreateUserSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """Create user with encrypted password."""
-        password = validated_data.pop('password')
+        password = validated_data.pop('password', None)
         user = User(**validated_data)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save()
         return user
     

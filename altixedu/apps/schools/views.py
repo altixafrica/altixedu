@@ -1,3 +1,4 @@
+from rest_framework import viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions, status
@@ -12,6 +13,152 @@ from apps.notifications.serializers import (
     StudentAIInsightsSerializer,
     RoleSettingSerializer
 )
+from apps.schools.models import Ministry, School
+from . import serializers
+from .serializers import MinistrySerializer, SchoolDirectorySerializer
+from .dashboard_payloads import build_school_admin_dashboard_payload
+
+
+class MinistryViewSet(viewsets.ModelViewSet):
+    """
+    Superadmin can manage ministries.
+    Ministry admins can only view their own ministry record.
+    """
+    serializer_class = MinistrySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if user.role == 'superadmin':
+            return Ministry.objects.all().order_by('country', 'state_or_province')
+
+        if user.role == 'ministry_admin' and user.ministry_id:
+            return Ministry.objects.filter(id=user.ministry_id)
+
+        return Ministry.objects.none()
+
+    def create(self, request, *args, **kwargs):
+        if request.user.role != 'superadmin':
+            return Response(
+                {'error': 'Only superadmin can create ministries'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if request.user.role != 'superadmin':
+            return Response(
+                {'error': 'Only superadmin can update ministries'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role != 'superadmin':
+            return Response(
+                {'error': 'Only superadmin can delete ministries'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().destroy(request, *args, **kwargs)
+
+
+class SchoolDirectoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Directory endpoint for school provisioning and oversight screens.
+    """
+    serializer_class = SchoolDirectorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = School.objects.select_related(
+            'ministry',
+            'subscription',
+            'subscription__tier',
+        )
+
+        if user.role == 'superadmin':
+            return queryset.order_by('name')
+
+        if user.role == 'ministry_admin' and user.ministry_id:
+            return queryset.filter(ministry_id=user.ministry_id).order_by('name')
+
+        if user.school_id:
+            return queryset.filter(id=user.school_id)
+
+        return School.objects.none()
+
+
+class SchoolViewSet(viewsets.ModelViewSet):
+    """
+    Complete CRUD operations for schools.
+    Superadmin: Full access to all schools
+    Ministry admin: Access to schools in their ministry
+    School admin: Access to only their school
+    """
+    serializer_class = serializers.SchoolSerializer  # Will need to create this
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        queryset = School.objects.select_related('ministry', 'subscription', 'subscription__tier')
+        
+        if user.role == 'superadmin':
+            return queryset.order_by('name')
+        
+        if user.role == 'ministry_admin' and user.ministry_id:
+            return queryset.filter(ministry_id=user.ministry_id).order_by('name')
+        
+        if user.school_id:
+            return queryset.filter(id=user.school_id)
+        
+        return School.objects.none()
+    
+    def create(self, request, *args, **kwargs):
+        """Only superadmin and ministry_admin can create schools"""
+        if request.user.role not in ['superadmin', 'ministry_admin']:
+            return Response(
+                {'error': 'Only superadmin or ministry_admin can create schools'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # If ministry_admin, auto-assign to their ministry
+        if request.user.role == 'ministry_admin' and not request.data.get('ministry'):
+            request.data['ministry'] = request.user.ministry_id
+        
+        return super().create(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        """Only superadmin can update all schools; others can only update their own"""
+        school = self.get_object()
+        
+        if request.user.role == 'superadmin':
+            return super().update(request, *args, **kwargs)
+        
+        if request.user.role == 'ministry_admin' and school.ministry_id == request.user.ministry_id:
+            return super().update(request, *args, **kwargs)
+        
+        if request.user.school_id == school.id:
+            return super().update(request, *args, **kwargs)
+        
+        return Response(
+            {'error': 'You do not have permission to update this school'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    def destroy(self, request, *args, **kwargs):
+        """Only superadmin can delete schools"""
+        if request.user.role != 'superadmin':
+            return Response(
+                {'error': 'Only superadmin can delete schools'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        return super().destroy(request, *args, **kwargs)
 
 
 class SchoolAdminDashboardView(APIView):
@@ -30,102 +177,4 @@ class SchoolAdminDashboardView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # 1. Fetch students, teachers, classrooms, subjects
-        students = Student.objects.filter(school=school)
-        teachers = User.objects.filter(school=school, role='teacher')
-        classrooms = Classroom.objects.filter(school=school)
-        subjects = Subject.objects.filter(school=school)
-        
-        # 2. Financial summary
-        fees = StudentFee.objects.filter(student__in=students)
-        total_fees = sum(fee.fee.amount for fee in fees)
-        total_paid = sum(fee.amount_paid for fee in fees)
-        total_outstanding = total_fees - total_paid
-        
-        # 3. Fetch AI insights for at-risk students
-        ai_insights = StudentAIInsights.objects.filter(
-            student__in=students
-        ).order_by('-performance_risk')
-        
-        at_risk_students = []
-        for insight in ai_insights:
-            if insight.low_attendance or insight.low_performance:
-                at_risk_students.append({
-                    'student_id': insight.student.id,
-                    'student_name': f"{insight.student.first_name} {insight.student.last_name}",
-                    'admission_number': insight.student.admission_number,
-                    'classroom': insight.student.classroom.name if insight.student.classroom else None,
-                    'attendance_risk': insight.attendance_risk,
-                    'performance_risk': insight.performance_risk,
-                    'low_attendance': insight.low_attendance,
-                    'low_performance': insight.low_performance,
-                    'flagged_subjects': insight.flagged_subjects
-                })
-        
-        # 4. Fetch school admin settings
-        settings = RoleSetting.objects.filter(role='admin', school=school)
-        settings_data = {s.key: s.value for s in settings}
-        
-        # 5. Build response
-        response_data = {
-            'user': {
-                'id': user.id,
-                'name': user.get_full_name(),
-                'email': user.email,
-                'role': user.role,
-                'school': school.name
-            },
-            'statistics': {
-                'total_students': students.count(),
-                'total_teachers': teachers.count(),
-                'total_classrooms': classrooms.count(),
-                'total_subjects': subjects.count(),
-                'at_risk_students': len(at_risk_students)
-            },
-            'finance': {
-                'total_fees': total_fees,
-                'total_paid': total_paid,
-                'total_outstanding': total_outstanding,
-                'collection_percentage': (
-                    (total_paid / total_fees * 100) if total_fees > 0 else 0
-                )
-            },
-            'students': [
-                {
-                    'id': s.id,
-                    'first_name': s.first_name,
-                    'last_name': s.last_name,
-                    'admission_number': s.admission_number,
-                    'classroom': s.classroom.name if s.classroom else None,
-                    'status': s.status,
-                    'gender': s.gender
-                } for s in students[:50]  # Limit to first 50 for performance
-            ],
-            'teachers': [
-                {
-                    'id': t.id,
-                    'first_name': t.first_name,
-                    'last_name': t.last_name,
-                    'email': t.email
-                } for t in teachers
-            ],
-            'classrooms': [
-                {
-                    'id': c.id,
-                    'name': c.name,
-                    'grade_level': c.grade_level,
-                    'student_count': c.students.count()
-                } for c in classrooms
-            ],
-            'subjects': [
-                {
-                    'id': s.id,
-                    'name': s.name,
-                    'code': s.code
-                } for s in subjects
-            ],
-            'at_risk_alerts': at_risk_students[:20],  # Top 20 at-risk students
-            'settings': settings_data
-        }
-        
-        return Response(response_data, status=status.HTTP_200_OK)
+        return Response(build_school_admin_dashboard_payload(user), status=status.HTTP_200_OK)

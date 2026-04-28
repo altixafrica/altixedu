@@ -32,3 +32,8 @@ class Attendance(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.date} - {self.status}"
+
+    def save(self, *args, **kwargs):
+        if self.student_id and not self.school_id:
+            self.school = self.student.school
+        super().save(*args, **kwargs)
