@@ -5,6 +5,9 @@ from rest_framework.decorators import action
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.db.models import Sum, Q, Count, F, Prefetch
+from django.core.cache import cache
+from django.utils import timezone
+from datetime import timedelta
 from .models import User
 from .serializers import UserSerializer, CreateUserSerializer, CreateMinistryAdminSerializer, PasswordResetSerializer, MinistryAdminLoginSerializer
 from .permissions import IsParent, IsSchoolAdmin
@@ -24,6 +27,37 @@ class LoginView(APIView):
     """
     permission_classes = [permissions.AllowAny]
 
+    def get_client_ip(self, request):
+        """Extract client IP address from request"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+    
+    def check_rate_limit(self, identifier):
+        """
+        Check if identifier (IP or username) exceeded rate limit.
+        Limit: 5 attempts per 60 seconds
+        """
+        cache_key = f'login_attempts_{identifier}'
+        attempts = cache.get(cache_key, [])
+        
+        # Remove attempts older than time window
+        now = timezone.now()
+        window_start = now - timedelta(seconds=60)
+        attempts = [t for t in attempts if t > window_start]
+        
+        if len(attempts) >= 5:
+            time_remaining = 60 - (now - attempts[0]).seconds
+            return False, f"Too many login attempts. Try again in {time_remaining} seconds."
+        
+        # Add current attempt
+        attempts.append(now)
+        cache.set(cache_key, attempts, 300)  # Keep for 5 minutes
+        return True, None
+
     def post(self, request):
         """
         Login with username/email and password.
@@ -37,6 +71,17 @@ class LoginView(APIView):
             return Response(
                 {'error': 'Password is required'},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Rate limiting by IP and identifier (username/email)
+        ip = self.get_client_ip(request)
+        identifier = email or username or ip
+        
+        allowed, error_msg = self.check_rate_limit(identifier)
+        if not allowed:
+            return Response(
+                {'error': error_msg},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
             )
         
         # Try to authenticate by username or email

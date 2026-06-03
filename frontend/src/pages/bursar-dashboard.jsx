@@ -15,6 +15,9 @@ import { StatCard } from '../components/stat-card';
 import { Alert, Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { SkeletonGrid, SkeletonChart } from '../components/skeleton-loader';
+import { SmartInsight, generateInsights } from '../components/smart-insights';
+import { FeeCollectionChart, PaymentStatusChart } from '../components/dashboard-charts';
 import { getCurrentUser, getStoredSession } from '../lib/django';
 import { getDashboardByRole } from '../lib/api-service';
 import { formatCurrency } from '../lib/format';
@@ -141,11 +144,9 @@ export const BursarDashboardPage = () => {
       }
     >
       {loading ? (
-        <div className="flex min-h-[320px] items-center justify-center">
-          <div className="flex items-center gap-3 rounded-full bg-slate-950 px-5 py-3 text-white">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm font-medium">Loading finance workspace...</span>
-          </div>
+        <div className="space-y-6">
+          <SkeletonGrid columns={4} />
+          <SkeletonChart />
         </div>
       ) : error ? (
         <Alert variant="error">
@@ -165,6 +166,32 @@ export const BursarDashboardPage = () => {
             ))}
           </div>
 
+          {/* Smart Insights Section */}
+          <div>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-950">Key Insights</h2>
+              <p className="text-sm text-slate-500">Finance alerts and collection opportunities</p>
+            </div>
+            <div className="grid gap-3">
+              {generateInsights(dashboardData, 'bursar').slice(0, 3).map((insight, idx) => (
+                <SmartInsight
+                  key={idx}
+                  type={insight.type}
+                  title={insight.title}
+                  message={insight.message}
+                  action={insight.action}
+                  confidence={insight.confidence}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid gap-6 xl:grid-cols-2">
+            <FeeCollectionChart />
+            <PaymentStatusChart />
+          </div>
+
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-6">
               <SectionCard title="Collection status mix" description="How fee accounts are distributed by payment posture right now.">
@@ -174,7 +201,7 @@ export const BursarDashboardPage = () => {
                     ['Partial', partialStatus, 'warning'],
                     ['Unpaid', unpaidStatus, 'error'],
                   ].map(([label, statusItem, variant]) => (
-                    <div key={label} className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4">
+                    <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-medium text-slate-950">{label}</p>
                         <Badge variant={variant}>{statusItem.count}</Badge>
@@ -188,7 +215,7 @@ export const BursarDashboardPage = () => {
               </SectionCard>
 
               <SectionCard title="Revenue health" description="Read the topline picture before drilling into individual records.">
-                <div className="rounded-[28px] bg-slate-950 p-6 text-white">
+                <div className="rounded-lg bg-slate-950 p-6 text-white">
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
                       <p className="text-sm text-white/70">Students billed</p>
@@ -234,11 +261,11 @@ export const BursarDashboardPage = () => {
 
               <SectionCard title="Collection notes" description="A short operational summary for the school finance desk.">
                 <div className="space-y-3">
-                  <div className="rounded-[22px] bg-slate-50 px-4 py-4">
+                  <div className="rounded-lg bg-slate-50 px-4 py-3">
                     <p className="text-sm text-slate-500">Fully settled records</p>
                     <p className="mt-2 text-2xl font-semibold text-slate-950">{paidStatus.count}</p>
                   </div>
-                  <div className="rounded-[22px] bg-slate-50 px-4 py-4">
+                  <div className="rounded-lg bg-slate-50 px-4 py-3">
                     <p className="text-sm text-slate-500">Need follow-up</p>
                     <p className="mt-2 text-2xl font-semibold text-slate-950">{partialStatus.count + unpaidStatus.count}</p>
                   </div>
@@ -255,6 +282,12 @@ export const BursarDashboardPage = () => {
                       </div>
                     </Alert>
                   ) : null}
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Tools" description="Messages and exports are available from the workspace navigation.">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  Keep the finance desk focused on recording payments, reminders, invoices, and collection health.
                 </div>
               </SectionCard>
             </div>

@@ -1,0 +1,80 @@
+
+> altixedu-frontend@1.0.0 test:e2e
+> playwright test
+
+[2m[WebServer] [22m(node:7636) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+[2m[WebServer] [22m(Use `node --trace-deprecation ...` to show where the warning was created)
+
+Running 151 tests using 2 workers
+
+1. Navigated to login
+2. Filled login form
+  ✓    2 tests\e2e\authenticated-workspaces.spec.js:11:1 › student workspace renders key learning panels (24.5s)
+  -    3 tests\e2e\authenticated-workspaces.spec.js:101:6 › admin settings and user management render with mocked school operations data
+  ✘    1 tests\e2e\debug-admin-login.spec.js:3:1 › admin login flow debug (30.2s)
+API Response Status: [33m200[39m
+API Response: {
+  "token": "264a07c1cf9fb1d2d9e83de7bcae11365bd4306f",
+  "user": {
+    "id": 3,
+    "username": "admin@atlascollege.test",
+    "email": "admin@atlascollege.test",
+    "first_name": "Admin",
+    "last_name": "User",
+    "full_name": "Admin User"
+  },
+  "role": "admin",
+  "school": {
+    "id": 3,
+    "name": "Atlas College",
+    "subdomain": "atlascollege",
+    "full_domain": "atlascollege.altixedu.com",
+    "country": "Nigeria",
+    "school_type": "private"
+  },
+  "ministry": null,
+  "permissions": {
+    "view_own_school": true,
+    "manage_school_staff": true,
+    "manage_students": true,
+    "view_student_details": true,
+    "access_government_features": true,
+    "manage_billing": true,
+    "view_school_reports": true,
+    "manage_school_settings": true,
+    "export_data": true
+  }
+}
+  ✓    4 tests\e2e\debug-auth.spec.js:5:1 › direct API test - can login and get token (10.7s)
+✅ Login: Keyboard navigation works
+error: [ERROR] API Error: {status: undefined, url: /api/auth/login/, message: Network Error, data: undefined}
+  ✓    5 tests\e2e\features-accessibility.spec.js:38:3 › Accessibility - Keyboard Navigation › Login form accessible via keyboard (2.0s)
+error: Login failed: AxiosError: Network Error
+    at S.onerror (http://127.0.0.1:4173/assets/index-C7_4xAVg.js:78:6298)
+    at hl.request (http://127.0.0.1:4173/assets/index-C7_4xAVg.js:80:2085)
+    at async X1 (http://127.0.0.1:4173/assets/index-C7_4xAVg.js:81:9818)
+    at async u (http://127.0.0.1:4173/assets/index-C7_4xAVg.js:81:140677)
+error: Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+  ✘    6 tests\e2e\debug-auth.spec.js:23:1 › frontend login flow - can fill form and login (30.1s)
+  ✘    7 tests\e2e\features-accessibility.spec.js:61:3 › Accessibility - Keyboard Navigation › Admin dashboard navigable via Tab key (30.1s)
+  ✘    8 tests\e2e\features-export.spec.js:57:3 › Export Functionality - All Roles › Admin - Export button visible on dashboard (30.1s)
+  ✘    9 tests\e2e\features-accessibility.spec.js:77:3 › Accessibility - Keyboard Navigation › Teacher dashboard keyboard accessible (30.1s)
+  ✘   10 tests\e2e\features-export.spec.js:75:3 › Export Functionality - All Roles › Admin - Can access export functionality (30.1s)
+  ✘   11 tests\e2e\features-accessibility.spec.js:93:3 › Accessibility - Keyboard Navigation › Shift+Tab reverse navigation works (30.1s)
+  ✘   12 tests\e2e\features-export.spec.js:91:3 › Export Functionality - All Roles › Teacher - Export attendance records button visible (30.1s)
+  ✘   13 tests\e2e\features-accessibility.spec.js:111:3 › Accessibility - Keyboard Navigation › Enter key activates buttons (30.1s)
+  ✘   14 tests\e2e\features-export.spec.js:107:3 › Export Functionality - All Roles › Bursar - Export report button exists (30.1s)
+  ✘   15 tests\e2e\features-accessibility.spec.js:134:3 › Accessibility - Keyboard Navigation › Escape key closes dialogs/modals (30.1s)
+  ✘   16 tests\e2e\features-export.spec.js:121:3 › Export Functionality - All Roles › Bursar - Export financial data functionality (30.1s)
+  ✘   17 tests\e2e\features-accessibility.spec.js:153:3 › Accessibility - Screen Reader Support › All buttons have accessible labels (30.1s)
+✅ Login: Form inputs properly labeled
+  ✓   19 tests\e2e\features-accessibility.spec.js:177:3 › Accessibility - Screen Reader Support › Form inputs have associated labels (546ms)
+  ✘   18 tests\e2e\features-export.spec.js:140:3 › Export Functionality - All Roles › Parent - Can access export/print child records (30.1s)
+  ✘   20 tests\e2e\features-accessibility.spec.js:190:3 › Accessibility - Screen Reader Support › Images have alt text (30.1s)
+  ✘   21 tests\e2e\features-export.spec.js:159:3 › Export Functionality - All Roles › Export buttons are functional (clickable) (30.1s)
+  ✘   22 tests\e2e\features-accessibility.spec.js:210:3 › Accessibility - Screen Reader Support › Links are descriptive (30.2s)
+  ✘   23 tests\e2e\features-export.spec.js:179:3 › Export Functionality - All Roles › Export feature preserves data integrity (30.1s)
+  ✘   24 tests\e2e\features-accessibility.spec.js:233:3 › Accessibility - Screen Reader Support › Headings have proper hierarchy (30.1s)
+  ✘   25 tests\e2e\features-export.spec.js:195:3 › Export Functionality - All Roles › Export feature available without breaking dashboard (30.1s)
+  ✘   26 tests\e2e\features-accessibility.spec.js:253:3 › Accessibility - Screen Reader Support › ARIA landmarks present (0ms)
+[2m[WebServer] [22m^C

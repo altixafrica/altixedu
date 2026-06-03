@@ -1,4 +1,17 @@
 from django.db import models
+from django.utils import timezone
+
+
+class ActiveSchoolManager(models.Manager):
+    """Manager that only returns active (non-deleted) schools"""
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True, deleted_at__isnull=True)
+
+
+class AllSchoolManager(models.Manager):
+    """Manager that returns all schools, including deleted ones"""
+    def get_queryset(self):
+        return super().get_queryset()
 
 
 class Ministry(models.Model):
@@ -102,6 +115,29 @@ class School(models.Model):
         default="en",
         help_text="Default language for school"
     )
+    # Multi-currency support for African schools
+    currency_code = models.CharField(
+        max_length=3,
+        default="USD",
+        help_text="ISO 4217 currency code (KES, UGX, NGN, GHS, ZAR, TZS, ETB, etc.)"
+    )
+    currency_symbol = models.CharField(
+        max_length=10,
+        default="$",
+        help_text="Currency symbol (e.g., ₦, KES, UGX)"
+    )
+    # Academic calendar format
+    academic_year_format = models.CharField(
+        max_length=20,
+        choices=[
+            ('calendar', 'Calendar Year (Jan-Dec)'),
+            ('african_sep', 'African Year (Sep-Aug)'),
+            ('african_jan', 'Academic Year (Jan-Dec after sep-aug)'),
+            ('custom', 'Custom Dates'),
+        ],
+        default='african_sep',
+        help_text="School calendar format (most African schools: Sep-Aug)"
+    )
     school_type = models.CharField(
         max_length=20,
         choices=SCHOOL_TYPE_CHOICES,
@@ -126,14 +162,25 @@ class School(models.Model):
         default=True,
         help_text="Superadmin can suspend schools"
     )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Soft-delete timestamp (NULL = not deleted)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Custom managers
+    objects = ActiveSchoolManager()  # Default manager - only active schools
+    all_objects = AllSchoolManager()  # Manager for all schools including deleted
 
     class Meta:
         ordering = ['name']
         indexes = [
             models.Index(fields=['subdomain']),
             models.Index(fields=['is_active']),
+            models.Index(fields=['deleted_at']),
+            models.Index(fields=['is_active', 'deleted_at']),
         ]
 
     def __str__(self):
@@ -143,3 +190,15 @@ class School(models.Model):
     def full_domain(self):
         """Return the full domain URL for this school"""
         return f"{self.subdomain}.altixedu.com"
+    
+    def soft_delete(self):
+        """Soft delete the school (mark as deleted without removing data)"""
+        self.is_active = False
+        self.deleted_at = timezone.now()
+        self.save()
+    
+    def restore(self):
+        """Restore a soft-deleted school"""
+        self.is_active = True
+        self.deleted_at = None
+        self.save()

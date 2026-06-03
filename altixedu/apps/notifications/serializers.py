@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Message, StudentAIInsights, SchoolSetting, RoleSetting
+from .models import Message, StudentAIInsights, SchoolSetting, RoleSetting, NotificationPreference
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -85,3 +85,21 @@ class RoleSettingSerializer(serializers.ModelSerializer):
             'id', 'role', 'school', 'school_name',
             'key', 'value', 'created_at', 'updated_at'
         ]
+
+
+class NotificationPreferenceSerializer(serializers.ModelSerializer):
+    """Serializer for user notification preferences."""
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    
+    class Meta:
+        model = NotificationPreference
+        fields = [
+            'id', 'user', 'user_name', 'user_email',
+            'email_enabled', 'sms_enabled', 'in_app_enabled',
+            'announcements_enabled', 'messages_enabled', 'grades_enabled',
+            'attendance_enabled', 'fees_enabled', 'schedule_enabled', 'system_enabled',
+            'quiet_hours_start', 'quiet_hours_end', 'digest_frequency',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']

@@ -39,7 +39,7 @@ export const SiteFooter = () => {
           </div>
         </div>
         <div className="mt-12 border-t border-slate-800 pt-8 text-sm text-slate-500">
-          <p>© 2026 AltixEdu. Built for modern education teams.</p>
+          <p> 2026 AltixEdu. Built for modern education teams.</p>
         </div>
       </div>
     </footer>

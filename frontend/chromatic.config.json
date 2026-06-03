@@ -1,0 +1,8 @@
+{
+  "projectToken": "your_chromatic_project_token_here",
+  "buildScriptName": "build-storybook",
+  "uploadMetadata": true,
+  "zip": true,
+  "storybookConfigDir": ".storybook",
+  "storybookBuildDir": "storybook-static"
+}

@@ -17,6 +17,9 @@ import { StatCard } from '../components/stat-card';
 import { Alert, Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { SkeletonGrid, SkeletonChart } from '../components/skeleton-loader';
+import { SmartInsight, generateInsights } from '../components/smart-insights';
+import { FeeCollectionChart, StudentPerformanceChart, AttendanceChart, PaymentStatusChart, SubscriptionHealthChart, MinistryPerformanceChart } from '../components/dashboard-charts';
 import { getDashboardData, getCurrentUser, getStoredSession, logoutUser } from '../lib/django';
 import { formatCurrency, formatDate, titleize } from '../lib/format';
 import { useAuth } from '../lib/hooks';
@@ -24,21 +27,18 @@ import { useAuth } from '../lib/hooks';
 const ROLE_META = {
   admin: {
     eyebrow: 'School Command',
-    title: 'School leadership overview',
-    icon: Building2,
-    description: 'Track enrollment, staffing, classroom activity, fee collection, and learner risk from one operational surface.',
+    title: 'Today at a glance',
+    description: 'Enrollment, fee movement, staff coverage, and learner risk in one calm operating view.',
   },
   superadmin: {
     eyebrow: 'Platform Portfolio',
-    title: 'Portfolio and growth command',
-    icon: Shield,
-    description: 'See subscription health, revenue signals, watchlist accounts, and network-wide operating momentum.',
+    title: 'Portfolio health',
+    description: 'Subscription health, revenue signals, watchlist accounts, and network momentum.',
   },
   ministry_admin: {
     eyebrow: 'Ministry View',
-    title: 'Education system oversight',
-    icon: Landmark,
-    description: 'Review state-level coverage, school performance, finance movement, and high-risk operational signals.',
+    title: 'State education oversight',
+    description: 'Coverage, attendance, finance movement, and urgent operating signals across schools.',
   },
 };
 
@@ -52,6 +52,12 @@ const Panel = ({ title, description, children, className = '' }) => (
     </CardHeader>
     <CardContent>{children}</CardContent>
   </Card>
+);
+
+const EmptyState = ({ children }) => (
+  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+    {children}
+  </div>
 );
 
 export const DashboardPage = () => {
@@ -145,15 +151,6 @@ export const DashboardPage = () => {
     return <Navigate replace to="/login" />;
   }
 
-  const topBarActions = (
-    <>
-      <Link to="/">
-        <Button variant="secondary">Public site</Button>
-      </Link>
-      <Button variant="outline" onClick={handleLogout}>Sign out</Button>
-    </>
-  );
-
   return (
     <WorkspaceShell
       session={session}
@@ -162,14 +159,19 @@ export const DashboardPage = () => {
       eyebrow={roleMeta.eyebrow}
       title={roleMeta.title}
       description={roleMeta.description}
-      actions={topBarActions}
+      actions={
+        <>
+          <Link to="/">
+            <Button variant="secondary">Public site</Button>
+          </Link>
+          <Button variant="outline" onClick={handleLogout}>Sign out</Button>
+        </>
+      }
     >
       {loading ? (
-        <div className="flex min-h-[280px] items-center justify-center">
-          <div className="flex items-center gap-3 rounded-full bg-slate-950 px-5 py-3 text-white shadow-sm">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm font-medium">Loading workspace...</span>
-          </div>
+        <div className="space-y-6">
+          <SkeletonGrid columns={4} />
+          <SkeletonChart />
         </div>
       ) : error ? (
         <Alert variant="error">
@@ -182,67 +184,93 @@ export const DashboardPage = () => {
           </div>
         </Alert>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-6">
           <div className="grid gap-4 xl:grid-cols-4">
-            {summaryCards.map((card) => (
-              <StatCard
-                key={card.label}
-                icon={card.icon}
-                label={card.label}
-                value={card.value}
-                detail={card.detail}
-                tone={card.tone}
-              />
-            ))}
+            {summaryCards.map((card) => <StatCard key={card.label} {...card} />)}
           </div>
 
+          {/* Smart Insights Section */}
+          {role === 'admin' && (
+            <div>
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-slate-950">Key Insights</h2>
+                <p className="text-sm text-slate-500">Data-driven alerts and recommendations</p>
+              </div>
+              <div className="grid gap-3">
+                {generateInsights(dashboardData, role).slice(0, 3).map((insight, idx) => (
+                  <SmartInsight
+                    key={idx}
+                    type={insight.type}
+                    title={insight.title}
+                    message={insight.message}
+                    action={insight.action}
+                    confidence={insight.confidence}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           {role === 'admin' ? (
-            <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+            <>
+              {/* Charts Section */}
+              <div className="grid gap-6 xl:grid-cols-2">
+                <FeeCollectionChart />
+                <StudentPerformanceChart />
+              </div>
+              <div className="grid gap-6 xl:grid-cols-2">
+                <AttendanceChart />
+                <PaymentStatusChart />
+              </div>
+            </>
+          ) : role === 'superadmin' ? (
+            <div className="grid gap-6 xl:grid-cols-1">
+              <SubscriptionHealthChart />
+            </div>
+          ) : role === 'ministry_admin' ? (
+            <div className="grid gap-6 xl:grid-cols-1">
+              <MinistryPerformanceChart />
+            </div>
+          ) : null}
+
+          {role === 'admin' ? (
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
               <div className="space-y-6">
-                <Panel title="Student risk watchlist" description="Top learners needing immediate academic or attendance follow-up.">
+                <Panel title="Learner follow-up" description="Students who need action before the week slips away.">
                   <div className="space-y-3">
                     {toArray(dashboardData.at_risk_alerts).slice(0, 6).map((student) => (
-                      <div key={student.student_id} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <div key={student.student_id} className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
                         <div>
                           <p className="font-medium text-slate-950">{student.student_name}</p>
                           <p className="mt-1 text-sm text-slate-500">{student.classroom || 'No classroom assigned'}</p>
                         </div>
-                        <div className="text-right text-sm text-slate-600">
+                        <div className="text-sm text-slate-600 md:text-right">
                           <p>{Math.round((student.performance_risk || 0) * 100)}% performance risk</p>
                           <p>{Math.round((student.attendance_risk || 0) * 100)}% attendance risk</p>
                         </div>
                       </div>
                     ))}
+                    {!toArray(dashboardData.at_risk_alerts).length ? (
+                      <EmptyState>No learner is currently flagged for immediate follow-up.</EmptyState>
+                    ) : null}
                   </div>
                 </Panel>
 
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <Panel title="Recent students" description="A quick read on current student records.">
-                    <div className="space-y-3">
-                      {toArray(dashboardData.students).slice(0, 5).map((student) => (
-                        <div key={student.id} className="rounded-2xl border border-slate-200 px-4 py-4">
-                          <p className="font-medium text-slate-950">{student.first_name} {student.last_name}</p>
-                          <p className="mt-1 text-sm text-slate-500">{student.classroom || 'No classroom'} · {titleize(student.status || 'active')}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </Panel>
-
-                  <Panel title="Teaching staff" description="Current teacher accounts across the school.">
-                    <div className="space-y-3">
-                      {toArray(dashboardData.teachers).slice(0, 5).map((teacher) => (
-                        <div key={teacher.id} className="rounded-2xl border border-slate-200 px-4 py-4">
-                          <p className="font-medium text-slate-950">{teacher.first_name} {teacher.last_name}</p>
-                          <p className="mt-1 text-sm text-slate-500">{teacher.email}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </Panel>
-                </div>
+                <Panel title="Recent students" description="Latest records to inspect or complete.">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {toArray(dashboardData.students).slice(0, 6).map((student) => (
+                      <div key={student.id} className="rounded-lg border border-slate-200 px-4 py-3">
+                        <p className="font-medium text-slate-950">{student.first_name} {student.last_name}</p>
+                        <p className="mt-1 text-sm text-slate-500">{student.classroom || 'No classroom'} / {titleize(student.status || 'active')}</p>
+                      </div>
+                    ))}
+                    {!toArray(dashboardData.students).length ? <EmptyState>No recent student records yet.</EmptyState> : null}
+                  </div>
+                </Panel>
               </div>
 
               <div className="space-y-6">
-                <Panel title="School structure" description="Core operational volume across classrooms and subjects.">
+                <Panel title="School structure" description="Core operating volume.">
                   <div className="grid gap-3">
                     {[
                       ['Classrooms', dashboardData.statistics?.total_classrooms || 0],
@@ -250,7 +278,7 @@ export const DashboardPage = () => {
                       ['Students', dashboardData.statistics?.total_students || 0],
                       ['Teachers', dashboardData.statistics?.total_teachers || 0],
                     ].map(([label, value]) => (
-                      <div key={label} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                      <div key={label} className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
                         <span className="text-sm text-slate-600">{label}</span>
                         <span className="text-base font-semibold text-slate-950">{value}</span>
                       </div>
@@ -258,59 +286,74 @@ export const DashboardPage = () => {
                   </div>
                 </Panel>
 
-                <Panel title="Financial pulse" description="High-level collection performance for the school.">
+                <Panel title="Financial pulse" description="Collection posture for the current cycle.">
                   <div className="space-y-3">
-                    <div className="rounded-[24px] bg-slate-950 p-5 text-white">
+                    <div className="rounded-lg bg-slate-950 p-5 text-white">
                       <p className="text-sm text-white/70">Outstanding balance</p>
-                      <p className="mt-2 text-3xl font-semibold">
+                      <p className="mt-2 text-2xl font-semibold">
                         {formatCurrency(dashboardData.finance?.total_outstanding || 0, currencyCode)}
                       </p>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
                       Fees collected: {formatCurrency(dashboardData.finance?.total_paid || 0, currencyCode)}
                     </div>
+                  </div>
+                </Panel>
+
+                <Panel title="Teaching staff" description="Current teacher accounts.">
+                  <div className="space-y-3">
+                    {toArray(dashboardData.teachers).slice(0, 5).map((teacher) => (
+                      <div key={teacher.id} className="rounded-lg border border-slate-200 px-4 py-3">
+                        <p className="font-medium text-slate-950">{teacher.first_name} {teacher.last_name}</p>
+                        <p className="mt-1 text-sm text-slate-500">{teacher.email}</p>
+                      </div>
+                    ))}
+                    {!toArray(dashboardData.teachers).length ? <EmptyState>No teacher records yet.</EmptyState> : null}
                   </div>
                 </Panel>
               </div>
             </div>
           ) : role === 'superadmin' ? (
             <div className="grid gap-6 xl:grid-cols-3">
-              <Panel title="Tier mix" description="Subscription concentration across plans." className="xl:col-span-1">
+              <Panel title="Tier mix" description="Subscription concentration across plans.">
                 <div className="space-y-3">
                   {toArray(dashboardData.tier_mix).map((tier) => (
-                    <div key={tier.tier_name} className="rounded-2xl border border-slate-200 px-4 py-4">
+                    <div key={tier.tier_name} className="rounded-lg border border-slate-200 px-4 py-3">
                       <p className="font-medium text-slate-950">{tier.tier_name}</p>
                       <p className="mt-1 text-sm text-slate-500">{tier.schools} schools</p>
                     </div>
                   ))}
+                  {!toArray(dashboardData.tier_mix).length ? <EmptyState>No tier data available yet.</EmptyState> : null}
                 </div>
               </Panel>
 
-              <Panel title="Watchlist" description="Accounts needing attention soonest." className="xl:col-span-1">
+              <Panel title="Watchlist" description="Accounts needing attention soonest.">
                 <div className="space-y-3">
                   {toArray(dashboardData.watchlist).slice(0, 6).map((item) => (
-                    <div key={item.subscription_id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <div key={item.subscription_id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                       <p className="font-medium text-slate-950">{item.school_name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{titleize(item.status)} · {item.days_until_renewal} days</p>
+                      <p className="mt-1 text-sm text-slate-500">{titleize(item.status)} / {item.days_until_renewal} days</p>
                     </div>
                   ))}
+                  {!toArray(dashboardData.watchlist).length ? <EmptyState>No renewal or billing watchlist items.</EmptyState> : null}
                 </div>
               </Panel>
 
-              <Panel title="Recent transactions" description="Latest billing movement." className="xl:col-span-1">
+              <Panel title="Recent transactions" description="Latest billing movement.">
                 <div className="space-y-3">
                   {toArray(dashboardData.recent_transactions).slice(0, 6).map((transaction) => (
-                    <div key={transaction.id} className="rounded-2xl border border-slate-200 px-4 py-4">
+                    <div key={transaction.id} className="rounded-lg border border-slate-200 px-4 py-3">
                       <p className="font-medium text-slate-950">{transaction.school_name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{titleize(transaction.status)} · {formatDate(transaction.created_at)}</p>
+                      <p className="mt-1 text-sm text-slate-500">{titleize(transaction.status)} / {formatDate(transaction.created_at)}</p>
                     </div>
                   ))}
+                  {!toArray(dashboardData.recent_transactions).length ? <EmptyState>No recent transactions.</EmptyState> : null}
                 </div>
               </Panel>
             </div>
           ) : (
             <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-              <Panel title="State performance" description="Coverage and education-finance movement across the ministry network.">
+              <Panel title="State performance" description="Coverage and finance movement across the ministry network.">
                 <div className="grid gap-4 md:grid-cols-2">
                   {[
                     ['Fees collected', formatCurrency(dashboardData.total_fees_collected || 0, currencyCode)],
@@ -318,7 +361,7 @@ export const DashboardPage = () => {
                     ['Average attendance', `${Math.round(dashboardData.avg_attendance_rate || 0)}%`],
                     ['Pass rate', `${Math.round(dashboardData.overall_pass_rate || 0)}%`],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                    <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-5">
                       <p className="text-sm text-slate-500">{label}</p>
                       <p className="mt-3 text-2xl font-semibold text-slate-950">{value}</p>
                     </div>
@@ -329,25 +372,26 @@ export const DashboardPage = () => {
               <Panel title="Alerts" description="Recent ministry-level attention signals.">
                 <div className="space-y-3">
                   {toArray(dashboardData.alerts).slice(0, 6).map((alert) => (
-                    <div key={alert.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <div key={alert.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                       <p className="font-medium text-slate-950">{alert.title || 'State alert'}</p>
                       <p className="mt-2 text-sm leading-6 text-slate-600">{alert.message}</p>
                     </div>
                   ))}
+                  {!toArray(dashboardData.alerts).length ? <EmptyState>No ministry alerts right now.</EmptyState> : null}
                 </div>
               </Panel>
             </div>
           )}
 
-          <div className="rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-5 md:px-6">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-5 py-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-950">Need the public product view too?</p>
-                <p className="mt-1 text-sm text-slate-600">Review positioning, pricing, and acquisition pages without leaving the workspace.</p>
+                <p className="text-sm font-medium text-slate-950">Secondary tools live in the sidebar.</p>
+                <p className="mt-1 text-sm text-slate-600">Messages, announcements, exports, and settings stay available without crowding the main dashboard.</p>
               </div>
               <Link to="/">
                 <Button variant="secondary">
-                  Open public site
+                  Public site
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>

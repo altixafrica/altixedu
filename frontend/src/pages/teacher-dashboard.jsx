@@ -197,7 +197,7 @@ export const TeacherDashboardPage = () => {
                         setSelectedClassroom(classroom.id);
                         setSearchStudent('');
                       }}
-                      className={`rounded-[22px] border px-4 py-4 text-left transition ${
+                      className={`rounded-lg border px-4 py-3 text-left transition ${
                         currentClassroom?.id === classroom.id
                           ? 'border-slate-950 bg-slate-950 text-white'
                           : 'border-slate-200 bg-slate-50 text-slate-950 hover:border-slate-300'
@@ -207,7 +207,7 @@ export const TeacherDashboardPage = () => {
                         <div>
                           <p className="font-medium">{classroom.name}</p>
                           <p className={`mt-1 text-sm ${currentClassroom?.id === classroom.id ? 'text-white/70' : 'text-slate-500'}`}>
-                            Grade {classroom.grade_level || 'N/A'} · {classroom.student_count || 0} students
+                            Grade {classroom.grade_level || 'N/A'} / {classroom.student_count || 0} students
                           </p>
                         </div>
                         {classroom.is_class_teacher ? (
@@ -230,7 +230,7 @@ export const TeacherDashboardPage = () => {
                   <Input
                     value={searchStudent}
                     onChange={(event) => setSearchStudent(event.target.value)}
-                    className="h-12 rounded-2xl pl-11"
+                    className="h-11 rounded-lg pl-11"
                     placeholder="Search students by name"
                   />
                 </div>
@@ -242,7 +242,7 @@ export const TeacherDashboardPage = () => {
                       return (
                         <div
                           key={student.id}
-                          className="flex flex-col gap-4 rounded-[24px] border border-slate-200 px-4 py-4 lg:flex-row lg:items-center lg:justify-between"
+                          className="flex flex-col gap-4 rounded-lg border border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between"
                         >
                           <div>
                             <p className="font-medium text-slate-950">
@@ -299,7 +299,7 @@ export const TeacherDashboardPage = () => {
                 <div className="space-y-3">
                   {aiWatchlist.length > 0 ? (
                     aiWatchlist.slice(0, 8).map((student) => (
-                      <div key={student.student_id} className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-4">
+                      <div key={student.student_id} className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-medium text-slate-950">{student.student_name}</p>
@@ -329,7 +329,7 @@ export const TeacherDashboardPage = () => {
                 <div className="space-y-3">
                   {recentMessages.length > 0 ? (
                     recentMessages.slice(0, 6).map((message) => (
-                      <div key={message.id} className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+                      <div key={message.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-medium text-slate-950">{message.counterpart_name}</p>
@@ -364,6 +364,12 @@ export const TeacherDashboardPage = () => {
                     <TrendingUp className="h-4 w-4" />
                     Refresh student watchlist
                   </Button>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Tools" description="Messages and exports are available from the workspace navigation.">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  Keep this page for teaching work: attendance, scores, learner follow-up, and recent parent communication.
                 </div>
               </SectionCard>
             </div>

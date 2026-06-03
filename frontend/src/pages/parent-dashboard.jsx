@@ -208,7 +208,7 @@ export const ParentDashboardPage = () => {
                     {child.first_name} {child.last_name}
                   </p>
                   <p className={`mt-1 text-sm ${selectedChild?.id === child.id ? 'text-white/70' : 'text-slate-500'}`}>
-                    {child.classroom || 'No classroom'} · {child.admission_number}
+                    {child.classroom || 'No classroom'}  {child.admission_number}
                   </p>
                   <p className={`mt-3 text-xs uppercase tracking-[0.14em] ${selectedChild?.id === child.id ? 'text-white/70' : 'text-slate-500'}`}>
                     {titleize(child.status)}
@@ -369,6 +369,16 @@ export const ParentDashboardPage = () => {
                       <CreditCard className="h-4 w-4" />
                       Review fee history
                     </Button>
+                  </div>
+                </SectionCard>
+
+                {/* Messaging Section */}
+                <SectionCard id="messaging" title="Messages & Updates" description="Direct communication with teachers and school.">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm text-slate-600"> Receive school announcements, message teachers, and stay informed about your child's progress.</p>
+                    <button className="mt-4 inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                      View messages
+                    </button>
                   </div>
                 </SectionCard>
               </div>

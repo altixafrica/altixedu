@@ -206,3 +206,143 @@ export const getDashboardData = async (session) => {
 
   return null;
 };
+
+// ==================== MESSAGING API ====================
+
+export const getMessageContacts = async () => {
+  try {
+    const response = await apiClient.get('/api/messages/contacts/');
+    return response.data || [];
+  } catch (error) {
+    console.error('Failed to fetch message contacts:', error);
+    throw error;
+  }
+};
+
+export const sendMessage = async (receiverId, content, studentId = null) => {
+  try {
+    const payload = {
+      receiver: receiverId,
+      content,
+    };
+    if (studentId) {
+      payload.student = studentId;
+    }
+    const response = await apiClient.post('/api/messages/', payload);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to send message:', error);
+    throw error;
+  }
+};
+
+export const getInbox = async () => {
+  try {
+    const response = await apiClient.get('/api/messages/inbox/');
+    return response.data || [];
+  } catch (error) {
+    console.error('Failed to fetch inbox:', error);
+    throw error;
+  }
+};
+
+export const getOutbox = async () => {
+  try {
+    const response = await apiClient.get('/api/messages/outbox/');
+    return response.data || [];
+  } catch (error) {
+    console.error('Failed to fetch outbox:', error);
+    throw error;
+  }
+};
+
+export const getUnreadCount = async () => {
+  try {
+    const response = await apiClient.get('/api/messages/unread_count/');
+    return response.data?.unread_count || 0;
+  } catch (error) {
+    console.error('Failed to fetch unread count:', error);
+    return 0;
+  }
+};
+
+export const markMessageAsRead = async (messageId) => {
+  try {
+    const response = await apiClient.post(`/api/messages/${messageId}/mark_as_read/`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to mark message as read:', error);
+    throw error;
+  }
+};
+
+export const markAllMessagesAsRead = async () => {
+  try {
+    const response = await apiClient.post('/api/messages/mark_all_as_read/');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to mark all messages as read:', error);
+    throw error;
+  }
+};
+
+// ==================== EXPORT API ====================
+
+export const exportStudentsData = async (format = 'csv') => {
+  try {
+    const response = await apiClient.get(`/api/students/export/?format=${format}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Failed to export students data:', error);
+    throw error;
+  }
+};
+
+export const exportStaffData = async (format = 'csv') => {
+  try {
+    const response = await apiClient.get(`/api/teachers/export/?format=${format}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Failed to export staff data:', error);
+    throw error;
+  }
+};
+
+export const exportAttendanceData = async (format = 'csv') => {
+  try {
+    const response = await apiClient.get(`/api/attendance/export/?format=${format}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Failed to export attendance data:', error);
+    throw error;
+  }
+};
+
+export const exportFeesData = async (format = 'csv') => {
+  try {
+    const response = await apiClient.get(`/api/finance/fees/export/?format=${format}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Failed to export fees data:', error);
+    throw error;
+  }
+};
+
+export const downloadFile = (blob, filename) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'export.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};

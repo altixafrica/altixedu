@@ -181,12 +181,12 @@ export const StudentDashboardPage = () => {
             <div className="space-y-6">
               <SectionCard
                 title="Academic snapshot"
-                description={`${student.classroom || 'No classroom assigned'} · ${student.admission_number || 'No admission number yet'}`}
+                description={`${student.classroom || 'No classroom assigned'} / ${student.admission_number || 'No admission number yet'}`}
               >
                 <div className="grid gap-4 md:grid-cols-2">
                   {subjects.length > 0 ? (
                     subjects.map((subject) => (
-                      <div key={subject.id} className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+                      <div key={subject.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                         <p className="font-medium text-slate-950">{subject.name}</p>
                         <p className="mt-1 text-sm text-slate-500">{subject.code}</p>
                       </div>
@@ -203,7 +203,7 @@ export const StudentDashboardPage = () => {
                     results.slice(0, 8).map((result) => (
                       <div
                         key={result.id}
-                        className="flex items-center justify-between rounded-[22px] border border-slate-200 px-4 py-4"
+                        className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3"
                       >
                         <div>
                           <p className="font-medium text-slate-950">{result.subject_name}</p>
@@ -224,7 +224,7 @@ export const StudentDashboardPage = () => {
 
             <div className="space-y-6">
               <SectionCard title="Attendance trend" description="Last 30 days of classroom presence.">
-                <div className="rounded-[24px] bg-slate-950 p-5 text-white">
+                <div className="rounded-lg bg-slate-950 p-5 text-white">
                   <div className="flex items-end justify-between gap-4">
                     <div>
                       <p className="text-sm text-white/70">Attendance rate</p>
@@ -247,7 +247,7 @@ export const StudentDashboardPage = () => {
                     ['Absent', summary.absent_days || 0],
                     ['Late', summary.late_days || 0],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-[22px] bg-slate-50 px-4 py-4">
+                    <div key={label} className="rounded-lg bg-slate-50 px-4 py-3">
                       <p className="text-sm text-slate-500">{label}</p>
                       <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
                     </div>
@@ -261,7 +261,7 @@ export const StudentDashboardPage = () => {
                     <span className="text-sm text-slate-600">Risk level</span>
                     <RiskBadge level={aiInsight.risk_level || 'LOW'} />
                   </div>
-                  <div className="space-y-3 rounded-[22px] bg-slate-50 p-4">
+                  <div className="space-y-3 rounded-lg bg-slate-50 p-4">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-slate-600">Attendance risk</span>
                       <span className="font-semibold text-slate-950">
@@ -294,7 +294,7 @@ export const StudentDashboardPage = () => {
                         {aiInsight.recommendations.map((recommendation, index) => (
                           <div
                             key={`${recommendation}-${index}`}
-                            className="flex gap-3 rounded-[20px] border border-slate-200 px-4 py-3"
+                            className="flex gap-3 rounded-lg border border-slate-200 px-4 py-3"
                           >
                             <ClipboardList className="mt-0.5 h-4 w-4 text-slate-500" />
                             <p className="text-sm leading-6 text-slate-600">{recommendation}</p>
@@ -312,7 +312,7 @@ export const StudentDashboardPage = () => {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {attendance.length > 0 ? (
                 attendance.slice(0, 8).map((entry) => (
-                  <div key={entry.id} className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+                  <div key={entry.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                     <p className="text-sm text-slate-500">{formatDate(entry.date)}</p>
                     <div className="mt-3 flex items-center justify-between">
                       <p className="font-medium text-slate-950">{titleize(entry.status)}</p>

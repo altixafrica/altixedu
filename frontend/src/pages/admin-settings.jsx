@@ -440,7 +440,7 @@ export const AdminSettingsPage = () => {
                           <p className="font-medium text-slate-950">{log.action}</p>
                           <p className="mt-1 text-sm leading-6 text-slate-600">{log.details}</p>
                           <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500">
-                            {log.user} · {log.timestamp}
+                            {log.user}  {log.timestamp}
                           </p>
                         </div>
                         <Badge>{log.user === 'System' ? 'System' : 'User'}</Badge>

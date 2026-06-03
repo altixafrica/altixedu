@@ -6,22 +6,31 @@ from django.utils import translation
 from rest_framework.request import Request
 
 
-# Supported languages
+# Supported languages - Prioritized for African schools
 SUPPORTED_LANGUAGES = {
     'en': 'English',
+    'sw': 'Swahili (Kiswahili)',  # Kenya, Tanzania, Uganda
+    'ha': 'Hausa (Hausa)',  # Nigeria, Niger
+    'yo': 'Yoruba',  # Nigeria
+    'fr': 'French (Français)',  # West Africa (Côte d'Ivoire, Cameroon, etc.)
+    'am': 'Amharic (አማርኛ)',  # Ethiopia
+    'zu': 'Zulu',  # South Africa
     'es': 'Spanish (Español)',
-    'fr': 'French (Français)',
-    'sw': 'Swahili',
-    'pt': 'Portuguese',
+    'pt': 'Portuguese (Português)',
 }
 
-# Translation strings
+# Translation strings - Comprehensive for African schools
 TRANSLATIONS = {
+    # Authentication errors
     'error_invalid_credentials': {
         'en': 'Invalid username or password',
         'es': 'Nombre de usuario o contraseña inválidos',
         'fr': 'Nom d\'utilisateur ou mot de passe invalide',
         'sw': 'Jina la mtumiaji au neno la siri batili',
+        'ha': 'Sunan mai amfani ko kalmar siri bai dace',
+        'yo': 'Orile eniyan tabi iyalenu alainidun',
+        'am': 'ስም ወይም ይለፍ ቃል ትክክል አይደለም',
+        'zu': 'Igama nomuntu noma iphasiwedi ayilungile',
         'pt': 'Nome de usuário ou senha inválido',
     },
     'error_unauthorized': {
@@ -29,6 +38,10 @@ TRANSLATIONS = {
         'es': 'No tiene permiso para acceder a este recurso',
         'fr': 'Vous n\'avez pas la permission d\'accéder à cette ressource',
         'sw': 'Huna ruhusa ya kupata rasilimali hii',
+        'ha': 'Ba ka da izini da ka shiga abin da ke aiki',
+        'yo': 'Ò kò ní àalù láti wọ ohun ìjinlẹ̀ yìi',
+        'am': 'ይህን ሀብት ለመድረስ ተገቢ ፈቃድ የለዎትም',
+        'zu': 'Awukho imvume yakho ukufinyelela ingcebo elingu',
         'pt': 'Você não tem permissão para acessar este recurso',
     },
     'error_not_found': {
@@ -36,55 +49,120 @@ TRANSLATIONS = {
         'es': 'Recurso no encontrado',
         'fr': 'Ressource non trouvée',
         'sw': 'Rasilimali haijagundulika',
+        'ha': 'Ba a sami abin da kuke nema',
+        'yo': 'Ohun ti o wa ko ti a rii',
+        'am': 'ሀብተ ምንዛሪነት አልተገኘም',
+        'zu': 'Ingcebo ethunyelwe ayikhona',
         'pt': 'Recurso não encontrado',
     },
+    
+    # Success messages
     'success_login': {
         'en': 'Login successful',
         'es': 'Inicio de sesión exitoso',
         'fr': 'Connexion réussie',
-        'sw': 'Kuingia kwa mwanzo kumefaulu',
+        'sw': 'Kuingia kumefaulu',
+        'ha': 'Shiga yampe',
+        'yo': 'Wiwọlọ le jade si ẹbẹ',
+        'am': 'መግቢያ ተስኖአል',
+        'zu': 'Ukungenisa kulwelile',
         'pt': 'Login bem-sucedido',
     },
     'success_logout': {
         'en': 'Logout successful',
         'es': 'Cierre de sesión exitoso',
         'fr': 'Déconnexion réussie',
-        'sw': 'Kuondoka kwa mwanzo kumefaulu',
+        'sw': 'Kuondoka kumefaulu',
+        'ha': 'Fita yampe',
+        'yo': 'Ìjẹ́ kúrò dá tẹ̀lẹ̀',
+        'am': 'መውጣት ተስኖአል',
+        'zu': 'Ukuphumula kulwelile',
         'pt': 'Logout bem-sucedido',
     },
     'success_created': {
         'en': 'Resource created successfully',
         'es': 'Recurso creado exitosamente',
         'fr': 'Ressource créée avec succès',
-        'sw': 'Rasilimali imeundwa kwa mwanzo',
+        'sw': 'Rasilimali imeundwa kwa matagumpay',
+        'ha': 'Abin ya samu da nasamu',
+        'yo': 'Ohun wa pese si baba',
+        'am': 'ሀብተ በተሳካ መልኩ ተፈጠረ',
+        'zu': 'Ingcebo yenziwe ngempumelelo',
         'pt': 'Recurso criado com sucesso',
     },
     'success_updated': {
         'en': 'Resource updated successfully',
         'es': 'Recurso actualizado exitosamente',
         'fr': 'Ressource mise à jour avec succès',
-        'sw': 'Rasilimali imesasishwa kwa mwanzo',
+        'sw': 'Rasilimali imebadilishwa kwa matagumpay',
+        'ha': 'Abin ya sabuntawa da nasamu',
+        'yo': 'Ohun wa tunsi si ẹbẹ',
+        'am': 'ሀብተ በተሳካ መልኩ ታዘበ',
+        'zu': 'Ingcebo ibuyisiwe ngempumelelo',
         'pt': 'Recurso atualizado com sucesso',
     },
     'success_deleted': {
         'en': 'Resource deleted successfully',
         'es': 'Recurso eliminado exitosamente',
         'fr': 'Ressource supprimée avec succès',
-        'sw': 'Rasilimali imefutwa kwa mwanzo',
+        'sw': 'Rasilimali imefutwa kwa matagumpay',
+        'ha': 'Abin ya goge da nasamu',
+        'yo': 'Ohun wa parun ni yoo',
+        'am': 'ሀብተ በተሳካ መልኩ ተሰወረ',
+        'zu': 'Ingcebo isusiwe ngempumelelo',
         'pt': 'Recurso deletado com sucesso',
     },
+    
+    # School-specific messages
+    'attendance_marked': {
+        'en': 'Attendance marked successfully',
+        'sw': 'Mahudhurio yameandikwa kwa matagumpay',
+        'ha': 'Haihuwa ya akoya yampe',
+        'yo': 'Ifipesẹ ti di ipile ni aaye',
+        'am': 'ስታትስ በተሳካ መልኩ ተቆጥሮ ነበር',
+        'zu': 'Okuhambi kwarekhodiwe ngempumelelo',
+        'fr': 'Présence marquée avec succès',
+    },
+    'fee_payment_recorded': {
+        'en': 'Fee payment recorded successfully',
+        'sw': 'Malipo ya ada yameandikwa kwa matagumpay',
+        'ha': 'Sadarwa jiya ya da ta kora',
+        'yo': 'Owo aye ti di ipile ni aaye',
+        'am': 'ክፍያ በተሳካ መልኩ ተመዝግቦ ነበር',
+        'zu': 'Isambulo solu irekhodiwe ngempumelelo',
+        'fr': 'Paiement des frais enregistré avec succès',
+    },
+    'grade_recorded': {
+        'en': 'Grade recorded successfully',
+        'sw': 'Daraja limeandikwa kwa matagumpay',
+        'ha': 'Jaji ya da samu',
+        'yo': 'Iye ti di ipile ni aaye',
+        'am': 'ደረጃ በተሳካ መልኩ ተመዝግቦ ነበር',
+        'zu': 'Imalusi irekhodiwe ngempumelelo',
+        'fr': 'Note enregistrée avec succès',
+    },
+    
+    # Errors
     'error_rate_limit': {
         'en': 'Too many requests. Please try again later.',
         'es': 'Demasiadas solicitudes. Por favor, inténtelo más tarde.',
         'fr': 'Trop de demandes. Veuillez réessayer plus tard.',
         'sw': 'Mabaki mengi sana. Tafadhali jaribu tena baadaye.',
+        'ha': 'Ƙarin bukatu da yawa. Da fatan za ku sake yunƙuri jiya.',
+        'yo': 'Ebe didara po. Jẹ́ kí àwa gbìyànjú lẹ̀ẹ̀kan ẹlẹ́kan.',
+        'am': 'በጣም ብዙ ጥያቄዎች። እባክሙ ከላይ እንደገና ይሞክሩ።',
+        'zu': 'Iziselo eziningi kakhulu. Ngiyabingelela uzame futhi kamuva.',
         'pt': 'Muitas solicitações. Por favor, tente novamente mais tarde.',
     },
     'error_invalid_role': {
         'en': 'Invalid user role',
         'es': 'Rol de usuario inválido',
         'fr': 'Rôle d\'utilisateur invalide',
-        'sw': 'Jukumu batili',
+        'sw': 'Jukumu la mtumiaji batili',
+        'ha': 'Jaki mai amfani ba shi da inganci',
+        'yo': 'Ẹ̀ kọ́ mẹ́ẹ́gá onítìmúlú',
+        'am': 'ዋናው ሚና ይህ አይደለም',
+        'zu': 'Iqhaza lomsebenzisi alibali',
         'pt': 'Função de usuário inválida',
     },
 }

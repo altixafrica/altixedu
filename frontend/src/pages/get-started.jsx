@@ -125,7 +125,7 @@ export const GetStartedPage = () => {
   return (
     <>
       <SiteHeader />
-      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-12">
+      <main className="min-h-screen bg-slate-950 py-12">
         <div className="container mx-auto max-w-6xl px-4 md:px-6">
           <div className="mb-10 text-center">
             <Badge variant="primary">School onboarding</Badge>
@@ -139,7 +139,7 @@ export const GetStartedPage = () => {
 
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-5">
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-6">
                 <div className="flex items-center gap-3">
                   <Shield className="h-5 w-5 text-green-400" />
                   <p className="font-medium text-white">Provisioning in one flow</p>
@@ -149,7 +149,7 @@ export const GetStartedPage = () => {
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-6">
                 <p className="text-sm uppercase tracking-[0.24em] text-slate-400">
                   Progress
                 </p>
@@ -306,15 +306,55 @@ export const GetStartedPage = () => {
                         </div>
                       </div>
 
-                      <Button
-                        type="button"
-                        className="w-full"
-                        disabled={!isStepOneValid}
-                        onClick={() => setStep(2)}
-                      >
-                        Continue to admin setup
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
+                      <div>
+                        <Button
+                          type="button"
+                          className="w-full"
+                          disabled={!isStepOneValid}
+                          onClick={() => setStep(2)}
+                          style={{
+                            opacity: isStepOneValid ? 1 : 0.6,
+                            cursor: isStepOneValid ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          {isStepOneValid ? (
+                            <>
+                              Continue to admin setup
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </>
+                          ) : (
+                            'Complete required fields'
+                          )}
+                        </Button>
+                        {!isStepOneValid && (
+                          <div className="mt-3 space-y-1 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                            {!formData.school_name.trim() && (
+                              <p className="text-xs text-amber-400">- School name (minimum 2 characters)</p>
+                            )}
+                            {!emailPattern.test(formData.school_email) && (
+                              <p className="text-xs text-amber-400">- Valid school email address</p>
+                            )}
+                            {!formData.city.trim() && (
+                              <p className="text-xs text-amber-400">- City (minimum 2 characters)</p>
+                            )}
+                            {!formData.country && (
+                              <p className="text-xs text-amber-400">- Country selection</p>
+                            )}
+                            {!formData.subdomain.trim() && (
+                              <p className="text-xs text-amber-400">- Subdomain (minimum 3 characters)</p>
+                            )}
+                            {formData.subdomain.trim() && subdomainStatus !== 'available' && (
+                              <p className="text-xs text-amber-400">- Verify subdomain is available</p>
+                            )}
+                            {subdomainStatus === 'available' && isStepOneValid === false && (
+                              <p className="text-xs text-green-400">All fields look good.</p>
+                            )}
+                          </div>
+                        )}
+                        {isStepOneValid && (
+                          <p className="mt-2 text-xs text-center text-green-400">All fields complete. Click to continue.</p>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <>
@@ -430,6 +470,15 @@ export const GetStartedPage = () => {
                           )}
                         </Button>
                       </div>
+                      {!isStepTwoValid && !loading && (
+                        <p className="mt-2 text-xs text-center text-amber-400">
+                          {!formData.admin_first_name.trim() ? 'First name required. ' : ''}
+                          {!formData.admin_last_name.trim() ? 'Last name required. ' : ''}
+                          {!emailPattern.test(formData.admin_email) ? 'Valid email required. ' : ''}
+                          {formData.admin_password.length < 8 ? 'Password must be 8+ chars. ' : ''}
+                          {formData.admin_password !== formData.confirm_password ? 'Passwords do not match' : ''}
+                        </p>
+                      )}
                     </>
                   )}
                 </form>

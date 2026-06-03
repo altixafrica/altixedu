@@ -5,12 +5,13 @@ from rest_framework.exceptions import PermissionDenied
 from django.db import models
 from django.db.models import Q, Avg
 from apps.accounts.permissions import IsRoleOwnerOrAdmin
-from .models import Message, SchoolSetting, StudentAIInsights, RoleSetting
+from .models import Message, SchoolSetting, StudentAIInsights, RoleSetting, NotificationPreference
 from .serializers import (
     MessageSerializer,
     SchoolSettingSerializer,
     StudentAIInsightsSerializer,
-    RoleSettingSerializer
+    RoleSettingSerializer,
+    NotificationPreferenceSerializer
 )
 
 
@@ -439,3 +440,56 @@ class SchoolSettingViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class NotificationPreferenceViewSet(viewsets.ViewSet):
+    """
+    ViewSet for managing user notification preferences.
+    Each user can view/edit their own preferences.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['get', 'put', 'patch'])
+    def my_preferences(self, request):
+        """
+        Get or update the current user's notification preferences.
+        Endpoint: /api/notifications/preferences/my_preferences/
+        """
+        user = request.user
+        preference, created = NotificationPreference.objects.get_or_create(user=user)
+        
+        if request.method == 'GET':
+            serializer = NotificationPreferenceSerializer(preference)
+            return Response(serializer.data)
+        
+        # PUT or PATCH
+        serializer = NotificationPreferenceSerializer(
+            preference,
+            data=request.data,
+            partial=request.method == 'PATCH'
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'])
+    def enable_all(self, request):
+        """Enable all notifications for current user."""
+        user = request.user
+        preference, _ = NotificationPreference.objects.get_or_create(user=user)
+        preference.enable_all()
+        return Response(
+            {'message': 'All notifications enabled'},
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=False, methods=['post'])
+    def disable_all(self, request):
+        """Disable all notifications for current user."""
+        user = request.user
+        preference, _ = NotificationPreference.objects.get_or_create(user=user)
+        preference.disable_all()
+        return Response(
+            {'message': 'All notifications disabled'},
+            status=status.HTTP_200_OK
+        )

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Student, StudentParent, Parent
+from .models import Student, Parent
 
 
 @admin.register(Student)
@@ -21,10 +21,3 @@ class ParentAdmin(admin.ModelAdmin):
         ('Basic Info', {'fields': ('user', 'school')}),
         ('Contact', {'fields': ('phone', 'address')}),
     )
-
-
-@admin.register(StudentParent)
-class StudentParentAdmin(admin.ModelAdmin):
-    list_display = ('student', 'parent', 'relationship')
-    list_filter = ('relationship',)
-    search_fields = ('student__first_name', 'parent__user__first_name', 'parent__user__last_name')

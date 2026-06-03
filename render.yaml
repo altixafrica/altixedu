@@ -1,0 +1,115 @@
+# Render.com Deployment Configuration
+# This file automatically deploys the Django backend when you push to GitHub
+
+services:
+  - type: web
+    name: altixedu-api
+    env: python
+    plan: free
+    region: oregon  # Change to your preferred region
+    
+    # GitHub repo connection
+    repo: https://github.com/YOUR_USERNAME/altixedu-backend
+    branch: main
+    
+    # Build & start commands
+    buildCommand: |
+      pip install -r requirements.txt && \
+      python altixedu/manage.py migrate --noinput && \
+      python altixedu/manage.py collectstatic --noinput --clear
+    
+    startCommand: |
+      gunicorn \
+        altixedu.wsgi:application \
+        --bind 0.0.0.0:${PORT} \
+        --workers 3 \
+        --worker-class sync \
+        --timeout 120 \
+        --access-logfile - \
+        --error-logfile -
+    
+    # Environment variables
+    envVars:
+      # Django Core
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "*.onrender.com,.altixedu.com,*.altixedu.com"
+      - key: DJANGO_LANGUAGE_CODE
+        value: "en-us"
+      - key: DJANGO_TIME_ZONE
+        value: "Africa/Lagos"
+      - key: DJANGO_SECURE_SSL_REDIRECT
+        value: "True"
+      - key: DJANGO_SECURE_COOKIES
+        value: "True"
+      - key: DJANGO_DB_ENGINE
+        value: "django.db.backends.postgresql"
+      - key: DJANGO_DB_NAME
+        value: "postgres"
+      - key: DJANGO_DB_PORT
+        value: "5432"
+      
+      # Database (from Supabase)
+      - key: DJANGO_DB_HOST
+        sync: false
+      - key: DJANGO_DB_USER
+        sync: false
+      - key: DJANGO_DB_PASSWORD
+        sync: false
+      
+      # Security
+      - key: DJANGO_SECRET_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      
+      # CORS & Frontend
+      - key: DJANGO_CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_APP_URL
+        sync: false
+      
+      # Email Provider (choose one)
+      - key: EMAIL_PROVIDER
+        value: "mailgun"
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        sync: false
+      - key: MAILGUN_SENDER_EMAIL
+        sync: false
+      
+      # SMS Provider (choose one)
+      - key: SMS_PROVIDER
+        value: "africas_talking"
+      - key: AFRICAS_TALKING_API_KEY
+        sync: false
+      - key: AFRICAS_TALKING_USERNAME
+        sync: false
+      - key: AFRICAS_TALKING_SENDER_ID
+        value: "AltixEdu"
+      
+      # Payment Gateway
+      - key: FLUTTERWAVE_BASE_URL
+        value: "https://api.flutterwave.com/v3"
+      - key: FLUTTERWAVE_SECRET_KEY
+        sync: false
+      - key: FLUTTERWAVE_PUBLIC_KEY
+        sync: false
+      - key: FLUTTERWAVE_SECRET_HASH
+        sync: false
+    
+    # Health check
+    healthCheckPath: /health/
+    
+    # Auto-deploy on push
+    autoDeploy: true
+
+# Optional: Add Redis for caching/Celery
+# Add in Render dashboard: Services → Create → Redis
+# Then add to environment:
+#   - key: REDIS_URL
+#     sync: false
+#   - key: CELERY_BROKER_URL
+#     sync: false

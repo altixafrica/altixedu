@@ -27,7 +27,9 @@ from apps.academics.views import (
     SubjectViewSet,
     TeacherSubjectViewSet,
     ExamViewSet,
-    ExamResultViewSet
+    ExamResultViewSet,
+    AcademicYearViewSet,
+    TermViewSet
 )
 from apps.accounts.views import (
     UserViewSet, 
@@ -47,11 +49,13 @@ from apps.schools.views import SchoolAdminDashboardView, MinistryViewSet, School
 from apps.attendance.views import AttendanceViewSet
 from apps.attendance.report_views import AttendanceReportViewSet, BulkImportViewSet
 from apps.finance.views import FeeViewSet, StudentFeeViewSet
+from apps.finance.payment_views import PaymentViewSet
 from apps.notifications.views import (
     MessageViewSet,
     SchoolSettingViewSet,
     StudentAIInsightsViewSet,
-    RoleSettingViewSet
+    RoleSettingViewSet,
+    NotificationPreferenceViewSet
 )
 from apps.students.health_views import (
     HealthMetricViewSet,
@@ -63,6 +67,11 @@ from apps.accounts.role_views import (
     ParentStudentLinkViewSet,
     RoleUserAssignmentViewSet,
     StudentClassroomAssignmentViewSet,
+)
+from apps.accounts.admin_management import (
+    UserManagementViewSet,
+    StudentManagementViewSet,
+    ParentManagementViewSet,
 )
 
 router = DefaultRouter()
@@ -83,9 +92,13 @@ router.register(r'users', UserViewSet, basename='users')
 router.register(r'attendance', AttendanceViewSet, basename='attendance')
 router.register(r'exams', ExamViewSet, basename='exams')
 router.register(r'exam-results', ExamResultViewSet, basename='exam-results')
+router.register(r'academic-years', AcademicYearViewSet, basename='academic-years')
+router.register(r'terms', TermViewSet, basename='terms')
 router.register(r'fees', FeeViewSet, basename='fees')
 router.register(r'student-fees', StudentFeeViewSet, basename='student-fees')
+router.register(r'payments', PaymentViewSet, basename='payments')
 router.register(r'messages', MessageViewSet, basename='messages')
+router.register(r'notification-preferences', NotificationPreferenceViewSet, basename='notification-preferences')
 router.register(r'ai-insights', StudentAIInsightsViewSet, basename='ai-insights')
 router.register(r'role-settings', RoleSettingViewSet, basename='role-settings')
 router.register(r'school-settings', SchoolSettingViewSet, basename='school-settings')
@@ -93,6 +106,9 @@ router.register(r'custom-roles', CustomRoleViewSet, basename='custom-roles')
 router.register(r'role-assignments', RoleUserAssignmentViewSet, basename='role-assignments')
 router.register(r'classroom-assignments', StudentClassroomAssignmentViewSet, basename='classroom-assignments')
 router.register(r'parent-student-links', ParentStudentLinkViewSet, basename='parent-student-links')
+router.register(r'user-management', UserManagementViewSet, basename='user-management')
+router.register(r'student-management', StudentManagementViewSet, basename='student-management')
+router.register(r'parent-management', ParentManagementViewSet, basename='parent-management')
 router.register(r'bulk-import', BulkImportViewSet, basename='bulk-import')
 router.register(r'attendance-reports', AttendanceReportViewSet, basename='attendance-reports')
 router.register(r'health-records', StudentHealthRecordViewSet, basename='health-records')
@@ -121,4 +137,5 @@ urlpatterns = [
     # Feature modules
     path('api/billing/', include('apps.billing.urls')),  # ⭐ Billing Features
     path('api/government/', include('apps.government.urls')),  # ⭐ Government Features
+    path('api/analytics/', include('apps.analytics.urls')),  # ⭐ Advanced Analytics
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

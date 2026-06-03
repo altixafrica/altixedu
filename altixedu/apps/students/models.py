@@ -37,7 +37,6 @@ class Student(models.Model):
 
     admission_number = models.CharField(
         max_length=50,
-        unique=True,
         help_text="Unique per school"
     )
 
@@ -70,35 +69,57 @@ class Student(models.Model):
         related_name='students'
     )
 
-    parents = models.ManyToManyField(
-        User,
-        through='StudentParent',
-        related_name='children'
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['school', 'last_name', 'first_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['school', 'admission_number'],
+                name='unique_student_admission_number_per_school',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['school', 'admission_number']),
+            models.Index(fields=['school', 'status']),
+        ]
+    
+    @property
+    def parents(self):
+        """
+        Get all active parents for this student via ParentStudentLink.
+        This property provides backward compatibility.
+        """
+        from apps.accounts.role_models import ParentStudentLink
+        return ParentStudentLink.objects.filter(
+            student=self,
+            is_active=True
+        ).values_list('parent', flat=True)
+    
+    @property
+    def parent_links(self):
+        """
+        Get all active parent-student links.
+        Use this for accessing full relationship data with permissions.
+        """
+        from apps.accounts.role_models import ParentStudentLink
+        return ParentStudentLink.objects.filter(
+            student=self,
+            is_active=True
+        )
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
 
 
-class StudentParent(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE)
-    parent = models.ForeignKey(
-        User,
-        limit_choices_to={'role': 'parent'},
-        on_delete=models.CASCADE
-    )
-    relationship = models.CharField(
-        max_length=50,
-        help_text="e.g., Mother, Father, Guardian"
-    )
-
-    class Meta:
-        unique_together = ('student', 'parent')
-
-    def __str__(self):
-        return f"{self.parent.get_full_name()} -> {self.student.first_name}"
+# ⚠️ DEPRECATED: StudentParent model consolidated into ParentStudentLink (apps.accounts.role_models)
+# ParentStudentLink provides the same functionality with additional permission granularity:
+# - relationship type (mother, father, guardian, etc.)
+# - permission control (receives_progress_reports, can_authorize_absence, can_view_grades)
+# - primary contact designation
+# 
+# Migration: Existing StudentParent data migrated to ParentStudentLink
+# Access: Use student.parent_links instead of student.parents.through
 
 
 class Parent(models.Model):
@@ -161,7 +182,8 @@ class Parent(models.Model):
     def children(self):
         """Get all children (students) of this parent"""
         return Student.objects.filter(
-            studentparent__parent=self.user
+            parent_links__parent=self.user,
+            parent_links__is_active=True,
         ).distinct() if self.user else Student.objects.none()
 
 

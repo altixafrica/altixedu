@@ -50,13 +50,15 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = _env_list(
     'DJANGO_ALLOWED_HOSTS',
-    ['localhost', '127.0.0.1', '[::1]'] if DEBUG else ['127.0.0.1', '.altixedu.com']
+    ['localhost', '127.0.0.1', '[::1]', 'testserver'] if DEBUG else ['127.0.0.1', '.altixedu.com']
 )
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',  # ⭐ ASGI server for WebSocket support
+    'channels',  # ⭐ Django Channels for WebSocket support
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -80,12 +82,15 @@ INSTALLED_APPS = [
     'apps.attendance',
     'apps.finance',
     'apps.notifications',
+    'apps.core',  # ⭐ Core compliance, auditing, and infrastructure
     'apps.billing',  # ⭐ Billing & Subscription Features
     'apps.government',  # ⭐ Government & Compliance Features
     'apps.platform',  # ⭐ Platform-wide features (announcements, AI alerts)
+    'apps.analytics',  # ⭐ Advanced Analytics & AI-powered dashboards
 ]
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # ⭐ Serve static files efficiently
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -120,6 +125,18 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'altixedu.wsgi.application'
+
+# ============================================================================
+# ASGI CONFIGURATION (for WebSocket support)
+# ============================================================================
+ASGI_APPLICATION = 'altixedu.asgi.application'
+
+# Django Channels configuration
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    }
+}
 
 
 # Database
@@ -171,8 +188,12 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
+# Static files configuration
 STATIC_URL = os.getenv('DJANGO_STATIC_URL', '/static/')
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'  # ⭐ WhiteNoise compression
+
+# Media files
 MEDIA_URL = os.getenv('DJANGO_MEDIA_URL', '/media/')
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -266,10 +287,12 @@ CORS_ALLOWED_ORIGINS = _env_list(
     'DJANGO_CORS_ALLOWED_ORIGINS',
     [
         'http://localhost:3000',
+        'http://localhost:3001',
         'http://localhost:5173',
         'http://localhost:4173',
         'http://localhost:8000',
         'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
         'http://127.0.0.1:5173',
         'http://127.0.0.1:4173',
     ] if DEBUG else []

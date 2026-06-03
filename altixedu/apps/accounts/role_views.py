@@ -21,7 +21,7 @@ from apps.accounts.role_serializers import (
     ParentStudentLinkSerializer
 )
 from apps.accounts.permissions import IsSchoolAdmin, IsSuperAdmin
-from apps.students.models import Student, StudentParent
+from apps.students.models import Student
 from audit import log_action
 from bulk_import import BulkUserImporter
 from report_generation import AttendanceReportGenerator

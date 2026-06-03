@@ -285,3 +285,133 @@ class RoleSetting(models.Model):
     def __str__(self):
         school_name = self.school.name if self.school else "Global"
         return f"{self.role} - {self.key} ({school_name})"
+
+
+class NotificationPreference(models.Model):
+    """User notification preferences for email, SMS, and in-app notifications."""
+    
+    NOTIFICATION_TYPES = [
+        ('announcement', 'Announcements'),
+        ('message', 'Direct Messages'),
+        ('grade', 'Grade Updates'),
+        ('attendance', 'Attendance Alerts'),
+        ('fee', 'Fee Reminders'),
+        ('schedule', 'Schedule Changes'),
+        ('system', 'System Updates'),
+    ]
+    
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notification_preferences'
+    )
+    
+    # Channel preferences (global)
+    email_enabled = models.BooleanField(default=True, help_text="Receive email notifications")
+    sms_enabled = models.BooleanField(default=False, help_text="Receive SMS notifications")
+    in_app_enabled = models.BooleanField(default=True, help_text="Receive in-app notifications")
+    
+    # Notification type preferences (per type, all channels)
+    announcements_enabled = models.BooleanField(default=True)
+    messages_enabled = models.BooleanField(default=True)
+    grades_enabled = models.BooleanField(default=True)
+    attendance_enabled = models.BooleanField(default=True)
+    fees_enabled = models.BooleanField(default=True)
+    schedule_enabled = models.BooleanField(default=True)
+    system_enabled = models.BooleanField(default=False)
+    
+    # Advanced options
+    quiet_hours_start = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Do not send notifications before this time"
+    )
+    quiet_hours_end = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Do not send notifications after this time"
+    )
+    
+    # Digest options
+    digest_frequency = models.CharField(
+        max_length=20,
+        default='realtime',
+        choices=[
+            ('realtime', 'Real-time'),
+            ('daily', 'Daily Digest'),
+            ('weekly', 'Weekly Digest'),
+            ('never', 'Never'),
+        ],
+        help_text="How often to receive notification digests"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name_plural = "Notification Preferences"
+    
+    def __str__(self):
+        return f"Notification Preferences for {self.user.username}"
+    
+    def should_send_notification(self, notification_type, channel='email'):
+        """
+        Check if notification should be sent based on user preferences.
+        
+        Args:
+            notification_type: str - Type of notification (announcement, message, grade, etc.)
+            channel: str - Channel to send on (email, sms, in_app)
+        
+        Returns:
+            bool - Whether to send this notification
+        """
+        # Check channel enabled
+        if channel == 'email' and not self.email_enabled:
+            return False
+        elif channel == 'sms' and not self.sms_enabled:
+            return False
+        elif channel == 'in_app' and not self.in_app_enabled:
+            return False
+        
+        # Check notification type enabled
+        type_attr = f"{notification_type}_enabled"
+        if hasattr(self, type_attr):
+            if not getattr(self, type_attr):
+                return False
+        
+        # Check quiet hours (skip for sms and urgent messages)
+        if channel == 'email' and self.quiet_hours_start and self.quiet_hours_end:
+            current_time = timezone.now().time()
+            if self.quiet_hours_start <= current_time <= self.quiet_hours_end:
+                return False
+        
+        return True
+    
+    def enable_all(self):
+        """Enable all notifications."""
+        self.email_enabled = True
+        self.sms_enabled = True
+        self.in_app_enabled = True
+        self.announcements_enabled = True
+        self.messages_enabled = True
+        self.grades_enabled = True
+        self.attendance_enabled = True
+        self.fees_enabled = True
+        self.schedule_enabled = True
+        self.system_enabled = True
+        self.save()
+    
+    def disable_all(self):
+        """Disable all notifications."""
+        self.email_enabled = False
+        self.sms_enabled = False
+        self.in_app_enabled = False
+        self.announcements_enabled = False
+        self.messages_enabled = False
+        self.grades_enabled = False
+        self.attendance_enabled = False
+        self.fees_enabled = False
+        self.schedule_enabled = False
+        self.system_enabled = False
+        self.save()

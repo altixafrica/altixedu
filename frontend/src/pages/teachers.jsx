@@ -21,19 +21,35 @@ export const TeachersPage = () => {
     <>
       <SiteHeader />
       <main className="bg-white">
-        <section className="border-b border-slate-200 bg-slate-950 py-16 text-white md:py-20">
-          <div className="container mx-auto px-4 md:px-6">
-            <Badge className="bg-white/10 text-white ring-1 ring-inset ring-white/15">For teachers</Badge>
-            <h1 className="mt-5 max-w-4xl text-balance text-4xl font-semibold md:text-6xl">
-              A classroom workspace designed to reduce admin drag.
-            </h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-              AltixEdu helps teachers move through attendance, grading, communication, and student follow-up with more clarity and less friction.
-            </p>
-            <div className="mt-8">
-              <Link to="/get-started">
-                <Button size="lg">Start your school setup</Button>
-              </Link>
+        <section className="relative border-b border-slate-200 py-16 text-white md:py-20 overflow-hidden">
+          {/* Background Image Layer */}
+          <div 
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: "url('https://images.unsplash.com/photo-1552664730-d307ca884978?w=1440&h=900&fit=crop&q=80')",
+              backgroundAttachment: "fixed",
+              backgroundPosition: "center 20%",
+            }}
+          />
+
+          {/* Dark Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-950/85 via-slate-900/80 to-slate-950/85" />
+
+          {/* Content */}
+          <div className="relative z-10">
+            <div className="container mx-auto px-4 md:px-6">
+              <Badge className="bg-white/10 text-white ring-1 ring-inset ring-white/15">For teachers</Badge>
+              <h1 className="mt-5 max-w-4xl text-balance text-4xl font-semibold md:text-6xl">
+                A classroom workspace designed to reduce admin drag.
+              </h1>
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
+                AltixEdu helps teachers move through attendance, grading, communication, and student follow-up with more clarity and less friction.
+              </p>
+              <div className="mt-8">
+                <Link to="/get-started">
+                  <Button size="lg">Start your school setup</Button>
+                </Link>
+              </div>
             </div>
           </div>
         </section>

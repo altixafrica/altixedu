@@ -22,10 +22,16 @@ import { getCurrentUser, getStoredSession } from '../lib/django';
 import { useAuth } from '../lib/hooks';
 import { bulkImportUsers, createUser, deleteUser, getUsers, updateUser } from '../lib/api-service';
 import { validators, validateForm } from '../lib/validation';
+import { BursarManager } from '../components/bursar-manager';
+import { ParentManager } from '../components/parent-manager';
+import { ClassroomAssignment } from '../components/classroom-assignment';
 
 const TAB_LABELS = {
   students: 'Students',
   teachers: 'Teachers',
+  bursars: 'Bursars',
+  parents: 'Parents',
+  classrooms: 'Classrooms',
   import: 'Bulk Import',
 };
 
@@ -318,7 +324,13 @@ export const UserManagementPage = () => {
             ))}
           </div>
 
-          {activeTab !== 'import' ? (
+          {activeTab === 'bursars' ? (
+            <BursarManager />
+          ) : activeTab === 'parents' ? (
+            <ParentManager />
+          ) : activeTab === 'classrooms' ? (
+            <ClassroomAssignment />
+          ) : activeTab !== 'import' ? (
             <SectionCard
               title={`${TAB_LABELS[activeTab]} directory`}
               description="Search the current roster, review user identity details, and make changes without losing list context."
