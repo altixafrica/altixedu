@@ -5,19 +5,7 @@
   "outputDirectory": "./dist",
   "installCommand": "npm install --prefer-offline --no-audit",
   "framework": "vite",
-  "env": {
-    "VITE_API_URL": {
-      "description": "Backend API URL (e.g., https://altixedu-api.onrender.com)"
-    },
-    "VITE_ENVIRONMENT": {
-      "default": "production"
-    }
-  },
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "${VITE_API_URL}/api/:path*"
-    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
